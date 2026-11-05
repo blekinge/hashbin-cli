@@ -44,7 +44,6 @@ public class StampCommand implements Callable<Integer> {
     @Override
     public Integer call() {
         String secret = config.hmacSecret();
-        String token = config.token();
         boolean allOk = true;
 
         for (Path file : files) {
@@ -54,7 +53,7 @@ public class StampCommand implements Callable<Integer> {
                 continue;
             }
             try {
-                allOk &= stampOne(file, secret, token);
+                allOk &= stampOne(file, secret);
             } catch (Exception e) {
                 System.out.println(Console.red("✗ ") + file.getFileName() + ": " + e.getMessage());
                 allOk = false;
@@ -63,7 +62,7 @@ public class StampCommand implements Callable<Integer> {
         return allOk ? 0 : 1;
     }
 
-    private boolean stampOne(Path file, String secret, String token) throws Exception {
+    private boolean stampOne(Path file, String secret) throws Exception {
         String name = file.getFileName().toString();
         System.out.println();
         System.out.println(Console.bold("Hashing ") + Console.cyan(name) + " …");
@@ -82,7 +81,7 @@ public class StampCommand implements Callable<Integer> {
             payload.put("file_name", name);
         }
 
-        TimestampRecord created = client.stamp(payload, token);
+        TimestampRecord created = client.stamp(payload);
         System.out.println("  " + Console.green("✓ Timestamped at ") + created.createdAt);
         TimestampFormat.print(1, created, secret);
         return true;

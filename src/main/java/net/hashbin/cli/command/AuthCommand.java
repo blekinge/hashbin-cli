@@ -135,7 +135,7 @@ public class AuthCommand implements Runnable {
                 return 1;
             }
             try {
-                MeView me = client.me(token);
+                MeView me = client.me();
                 Cli.ok(me.email + "  " + Console.dim("(id: " + me.userId + ")"));
                 return 0;
             } catch (ApiException e) {

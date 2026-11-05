@@ -50,13 +50,16 @@ it locally:
   `hashbin-api` jar (`quarkus.index-dependency.hashbin-api.…`) so Quarkus discovers
   the `@RegisterRestClient` interfaces.
 
-[`HashbinClient`](src/main/java/net/hashbin/cli/client/HashbinClient.java) is a
-thin **facade** over those generated `*Api` interfaces: it builds each client with
-`RestClientBuilder` (server root = the configured base minus `/api`, since the
-generated interfaces declare `@Path("/api")`), attaches the bearer token via
-`BearerClientHeadersFactory`, maps the generated DTOs onto the CLI's stable models
-(`TimestampRecord`, …), and translates `net.hashbin.api.ApiException` (and transport
-failures) into the CLI's own `ApiException`. Commands and tests are unaware of it.
+[`HashbinClient`](src/main/java/net/hashbin/cli/client/HashbinClient.java) is an
+`@ApplicationScoped` facade that injects one configured `@RestClient` per generated
+`*Api`. For each interface it declares a local sub-interface that `extends` the generated
+one (which we don't own) and adds `@RegisterRestClient(configKey="hashbin")`,
+`@RegisterClientHeaders(CliBearerHeadersFactory)` (bearer from `CliConfig`) and
+`@RegisterProvider(BaseUriOverrideFilter)` — the same decorator pattern as
+`TkPrefetcherConnector`. No `RestClientBuilder`/`new` and no manual provider registration;
+the facade maps the generated DTOs onto the CLI's stable models (`TimestampRecord`, …) and
+translates `net.hashbin.api.ApiException` (and transport failures) into the CLI's own
+`ApiException`. Commands and tests are unaware of it.
 
 > A few endpoints (`/health`, `/auth/login`) are declared with a loose schema in
 > the backend's OpenAPI document, so the generated client returns a raw `Object`
@@ -245,14 +248,18 @@ signature verifies against the real server secret. This mirrors the backend's
   at execution time, after `ParseResult` is resolved — a `@Singleton`/eager read would cycle with
   the Picocli command build. The `token`/`hmacSecret` fields are `@ToString.Exclude`d so they
   never leak into a log line.
-- **The REST client is an injected `@ApplicationScoped` bean, not a `new`.** `HashbinClient`
-  is `@ApplicationScoped` and `@Inject`s `CliConfig`, resolving the base URL lazily — so it
-  honours `--api-base` (the URL comes from the command line via `CliConfig`, not from
-  MicroProfile config). Being normal-scoped means commands receive a lazy proxy, so building a
-  command during `ParseResult` production never eagerly triggers client/config creation
-  (that would cycle); the client is only realized when a command first calls it, at execution
-  time. Note the `@Inject @RestClient` pattern used by `ScoreBoardConnector`-style code would
-  *not* work here: it reads the base URL from config at startup, before `--api-base` is parsed.
+- **The REST clients are injected, configured `@RestClient` beans.** `HashbinClient` is
+  `@ApplicationScoped` and injects one `@RestClient` per generated interface. Each is a local
+  sub-interface that `extends` the generated `*Api` (we don't own it) and decorates it with
+  `@RegisterRestClient(configKey="hashbin")`, `@RegisterClientHeaders(CliBearerHeadersFactory)`
+  (bearer from `CliConfig`) and `@RegisterProvider(BaseUriOverrideFilter)`. No
+  `RestClientBuilder`/`new` anywhere. This is the same pattern as `TkPrefetcherConnector`.
+- **`--api-base` works despite config-bound `@RestClient`.** `@RegisterRestClient` binds the
+  base URL from `quarkus.rest-client.hashbin.url` at startup (a placeholder), *before* picocli
+  parses args — so `BaseUriOverrideFilter` rewrites the request origin from `CliConfig` on every
+  call. Both the filter and the headers factory read `CliConfig` lazily (a normal-scoped proxy),
+  so nothing is resolved during the Picocli command build — which would otherwise cycle with
+  `ParseResult` production.
 - **A global `GlobalExceptionHandler` is the safety net**, wired via `setExecutionExceptionHandler`
   in `Main.run`. The commands still catch `ApiException` themselves (to print the server's
   `{"error": ...}` in the CLI's `✗` style); the handler covers anything that escapes.

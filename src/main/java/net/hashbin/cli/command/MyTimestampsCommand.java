@@ -33,7 +33,7 @@ public class MyTimestampsCommand implements Callable<Integer> {
             return 1;
         }
         try {
-            List<TimestampRecord> records = client.myTimestamps(token);
+            List<TimestampRecord> records = client.myTimestamps();
             if (records.isEmpty()) {
                 Cli.warn("No timestamps recorded for this account.");
                 return 0;

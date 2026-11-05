@@ -1,24 +1,25 @@
 package net.hashbin.cli.client;
 
-import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
+import jakarta.ws.rs.core.Response;
+
+import org.eclipse.microprofile.rest.client.annotation.RegisterClientHeaders;
+import org.eclipse.microprofile.rest.client.annotation.RegisterProvider;
+import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
+import org.eclipse.microprofile.rest.client.inject.RestClient;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-import jakarta.ws.rs.core.Response;
-
-import org.eclipse.microprofile.rest.client.RestClientBuilder;
-
-import net.hashbin.api.ApiExceptionMapper;
 import net.hashbin.api.AuthApi;
 import net.hashbin.api.HealthResourceApi;
 import net.hashbin.api.TimestampsApi;
-import net.hashbin.api.auth.BearerClientHeadersFactory;
 import net.hashbin.api.model.AuthRequest;
 import net.hashbin.api.model.MeView;
 import net.hashbin.api.model.StampRequest;
@@ -29,25 +30,30 @@ import net.hashbin.cli.model.AuthResponse;
 import net.hashbin.cli.model.TimestampRecord;
 
 /**
- * Talks to the hashbin REST API through the client <em>generated</em> from the
- * backend's OpenAPI contract and consumed as a Maven dependency
- * ({@code net.hashbin:hashbin-api} → {@code net.hashbin.api.*}, a MicroProfile
- * REST Client interface plus Jackson models).
+ * Talks to the hashbin REST API through the client <em>generated</em> from the backend's
+ * OpenAPI contract and consumed as a Maven dependency ({@code net.hashbin:hashbin-api} →
+ * {@code net.hashbin.api.*}, a MicroProfile REST Client interface plus Jackson models).
  *
- * <p>This class is a thin <em>facade</em>, and an {@link ApplicationScoped} CDI bean so it
- * can be injected once per run rather than constructed per call: it owns the two things the
- * generated library cannot know about — the runtime base URL (read lazily from the injected
- * {@link CliConfig}, so {@code --api-base} is honored) and the per-call bearer token —
- * and adapts the generated types to the CLI's own stable models
- * ({@link TimestampRecord}, {@link AuthResponse}, {@link net.hashbin.cli.model.MeView})
- * and its {@link ApiException}. Routing, (de)serialization and transport all live in
- * the generated {@code *Api} interfaces, wired here through the MicroProfile
- * {@link RestClientBuilder}, so the wire contract is never hand-coded here.
+ * <p>It is an {@link ApplicationScoped} facade injecting three configured REST clients
+ * (one per generated interface), each declared as a local sub-interface below that
+ * {@code extends} the generated {@code *Api} and adds, without editing it:
+ * <ul>
+ *   <li>{@code @RegisterRestClient(configKey="hashbin")} — so {@code @RestClient} builds a
+ *       proxy against {@code quarkus.rest-client.hashbin.url};</li>
+ *   <li>{@code @RegisterClientHeaders} ({@link CliBearerHeadersFactory}) — adds
+ *       {@code Authorization: Bearer} from the resolved {@link CliConfig} to every call;</li>
+ *   <li>{@code @RegisterProvider} ({@link BaseUriOverrideFilter}) — rewrites the request
+ *       origin to {@code --api-base}, overriding the startup-bound config URL at request
+ *       time so the runtime base URL is honoured.</li>
+ * </ul>
+ * Non-2xx is mapped to {@code net.hashbin.api.ApiException} by the generated, globally
+ * {@code @Provider}-registered {@code ApiExceptionMapper}; {@link #guard} translates it (and
+ * transport failures) into the CLI's own {@link ApiException}. The facade's remaining job is
+ * adapting the generated DTOs to the CLI's stable models.
  *
- * <p>Two endpoints are declared with a loose schema in the backend's OpenAPI
- * document and so arrive as a raw {@code Object} (a Jackson {@code Map}):
- * {@code /health} and {@code /auth/login}. The facade reads the fields it needs
- * out of that map rather than assuming a generated type exists for them.
+ * <p>Two endpoints ({@code /health}, {@code /auth/login}) are declared with a loose schema in
+ * the backend's OpenAPI document and so arrive as a raw {@code Object} (a Jackson
+ * {@code Map}); the facade reads the fields it needs from that map.
  */
 @ApplicationScoped
 public class HashbinClient {
@@ -55,28 +61,56 @@ public class HashbinClient {
     /** Only used to read the {@code {"error": "..."}} message out of failed responses. */
     private static final ObjectMapper ERROR_MAPPER = new ObjectMapper();
 
-    /** Resolved command-line configuration; the API base URL is read lazily from here. */
     @Inject
     CliConfig config;
 
-    /** The configured API base URL (trailing slash trimmed), read from {@link #config}. */
-    private String apiBase() {
-        String base = config.apiBase();
-        return base.endsWith("/") ? base.substring(0, base.length() - 1) : base;
+    private final HashbinTimestamps timestamps;
+    private final HashbinAuth auth;
+    private final HashbinHealth health;
+
+    @Inject
+    HashbinClient(@RestClient HashbinTimestamps timestamps,
+            @RestClient HashbinAuth auth,
+            @RestClient HashbinHealth health) {
+        this.timestamps = timestamps;
+        this.auth = auth;
+        this.health = health;
+    }
+
+    // ── Configured clients: decorate the generated interfaces (we don't own them) ───
+
+    @Singleton
+    @RegisterRestClient(configKey = "hashbin")
+    @RegisterClientHeaders(CliBearerHeadersFactory.class)
+    @RegisterProvider(BaseUriOverrideFilter.class)
+    interface HashbinTimestamps extends TimestampsApi {
+    }
+
+    @Singleton
+    @RegisterRestClient(configKey = "hashbin")
+    @RegisterClientHeaders(CliBearerHeadersFactory.class)
+    @RegisterProvider(BaseUriOverrideFilter.class)
+    interface HashbinAuth extends AuthApi {
+    }
+
+    @Singleton
+    @RegisterRestClient(configKey = "hashbin")
+    @RegisterClientHeaders(CliBearerHeadersFactory.class)
+    @RegisterProvider(BaseUriOverrideFilter.class)
+    interface HashbinHealth extends HealthResourceApi {
     }
 
     // ── Endpoints ───────────────────────────────────────────────────────────
 
     /** GET /health → the server's {@code status} value (typically {@code "ok"}). */
     public String health() {
-        Object body = guard(() -> api(HealthResourceApi.class, null).apiHealthGet());
+        Object body = guard(() -> health.apiHealthGet());
         return textField(body, "status");
     }
 
     /** POST /stamp. {@code payload} keys are the snake_case wire names. */
-    public TimestampRecord stamp(Map<String, Object> payload, String token) {
-        TimestampView view = guard(() -> api(TimestampsApi.class, token)
-                .apiStampPost(toStampRequest(payload), null, null));
+    public TimestampRecord stamp(Map<String, Object> payload) {
+        TimestampView view = guard(() -> timestamps.apiStampPost(toStampRequest(payload), null, null));
         return toRecord(view);
     }
 
@@ -85,13 +119,13 @@ public class HashbinClient {
         String algo = (algorithm == null || algorithm.isBlank() || "auto".equalsIgnoreCase(algorithm))
                 ? null
                 : algorithm;
-        List<TimestampPublicView> views = guard(() -> api(TimestampsApi.class, null).apiVerifyGet(algo, hash));
+        List<TimestampPublicView> views = guard(() -> timestamps.apiVerifyGet(algo, hash));
         return views.stream().map(HashbinClient::toRecord).toList();
     }
 
-    /** GET /my-timestamps → array of full records (token required). */
-    public List<TimestampRecord> myTimestamps(String token) {
-        List<TimestampView> views = guard(() -> api(TimestampsApi.class, token).apiMyTimestampsGet());
+    /** GET /my-timestamps → array of full records (bearer token applied by the header factory). */
+    public List<TimestampRecord> myTimestamps() {
+        List<TimestampView> views = guard(() -> timestamps.apiMyTimestampsGet());
         return views.stream().map(HashbinClient::toRecord).toList();
     }
 
@@ -100,20 +134,20 @@ public class HashbinClient {
         String limitParam = limit == null ? null : limit.toString();
         String offsetParam = offset == null ? null : offset.toString();
         List<TimestampPublicView> views =
-                guard(() -> api(TimestampsApi.class, null).apiExploreGet(limitParam, offsetParam));
+                guard(() -> timestamps.apiExploreGet(limitParam, offsetParam));
         return views.stream().map(HashbinClient::toRecord).toList();
     }
 
     /** POST /auth/register → 201 + AuthResponse. */
     public AuthResponse register(String email, String password) {
         net.hashbin.api.model.AuthResponse r =
-                guard(() -> api(AuthApi.class, null).apiAuthRegisterPost(toAuthRequest(email, password)));
+                guard(() -> auth.apiAuthRegisterPost(toAuthRequest(email, password)));
         return toAuthResponse(r.getToken(), r.getTokenType(), r.getExpiresIn(), r.getUserId(), r.getEmail());
     }
 
     /** POST /auth/login → 200 + AuthResponse (loose schema: parsed from the raw body map). */
     public AuthResponse login(String email, String password) {
-        Object body = guard(() -> api(AuthApi.class, null).apiAuthLoginPost(toAuthRequest(email, password)));
+        Object body = guard(() -> auth.apiAuthLoginPost(toAuthRequest(email, password)));
         AuthResponse out = new AuthResponse();
         out.token = textField(body, "token");
         out.tokenType = textField(body, "token_type");
@@ -123,40 +157,16 @@ public class HashbinClient {
         return out;
     }
 
-    /** GET /auth/me → MeView (token required). */
-    public net.hashbin.cli.model.MeView me(String token) {
-        MeView me = guard(() -> api(AuthApi.class, token).apiAuthMeGet());
+    /** GET /auth/me → MeView (bearer token applied by the header factory). */
+    public net.hashbin.cli.model.MeView me() {
+        MeView me = guard(() -> auth.apiAuthMeGet());
         net.hashbin.cli.model.MeView view = new net.hashbin.cli.model.MeView();
         view.userId = me.getUserId();
         view.email = me.getEmail();
         return view;
     }
 
-    // ── Generated-client plumbing ───────────────────────────────────────────
-
-    /**
-     * A generated {@code *Api} proxy pointed at the configured server root, with the bearer
-     * token attached per-instance via {@link BearerClientHeadersFactory} (a null/blank
-     * token adds no header, for anonymous endpoints) and {@link ApiExceptionMapper}
-     * so any non-2xx raises the generated {@link net.hashbin.api.ApiException}.
-     */
-    private <A> A api(Class<A> type, String token) {
-        return RestClientBuilder.newBuilder()
-                .baseUri(URI.create(serverRoot()))
-                .register(new BearerClientHeadersFactory(token))
-                .register(new ApiExceptionMapper())
-                .build(type);
-    }
-
-    /**
-     * The REST base URI. The generated interfaces declare {@code @Path("/api")} at
-     * class level, so the {@link RestClientBuilder} base must be the <em>server
-     * root</em>; strip the trailing {@code /api} that the CLI's {@code apiBase} carries.
-     */
-    private String serverRoot() {
-        String base = apiBase();
-        return base.endsWith("/api") ? base.substring(0, base.length() - "/api".length()) : base;
-    }
+    // ── Model adaptation ────────────────────────────────────────────────────
 
     private static StampRequest toStampRequest(Map<String, Object> payload) {
         StampRequest request = new StampRequest();
@@ -251,7 +261,7 @@ public class HashbinClient {
         } catch (RuntimeException e) {
             // No HTTP response produced: connection refused / DNS failure / interrupted.
             String cause = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            throw new ApiException(0, "API unreachable (" + apiBase() + "): " + cause);
+            throw new ApiException(0, "API unreachable (" + config.apiBase() + "): " + cause);
         }
     }
 
@@ -261,7 +271,7 @@ public class HashbinClient {
         String body = readEntity(response);
         if (status == 0) {
             String cause = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            return new ApiException(0, "API unreachable (" + apiBase() + "): " + cause);
+            return new ApiException(0, "API unreachable (" + config.apiBase() + "): " + cause);
         }
         String message = errorMessage(body);
         if (message == null) {
