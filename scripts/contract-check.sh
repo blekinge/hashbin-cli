@@ -7,27 +7,27 @@
 #
 # Prerequisites:
 #   - Backend running:   (cd ../hashbin-quarkus && mvn quarkus:dev)
-#   - JDK 21 on PATH or via JAVA_HOME (Quarkus rejects JDK 25 class files)
+#   - JDK 25 on PATH or via JAVA_HOME (matches the uber-jar build)
 #
 # Env overrides:
 #   HASHBIN_API_BASE     default http://localhost:8080/api
 #   HASHBIN_HMAC_SECRET  must match the running server's secret so the signature
 #                        re-check passes (dev default below)
-#   HASHBIN_CLI_JAR      path to the built CLI runner jar
-#                        default target/quarkus-app/quarkus-run.jar
+#   HASHBIN_CLI_JAR      path to the built CLI über-jar
+#                        default target/hashbin-cli-1.0.0-SNAPSHOT.jar
 set -euo pipefail
 
 API_BASE="${HASHBIN_API_BASE:-http://localhost:8080/api}"
 SECRET="${HASHBIN_HMAC_SECRET:-dev-only-insecure-secret-change-me}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-JAR="${HASHBIN_CLI_JAR:-$HERE/target/quarkus-app/quarkus-run.jar}"
+JAR="${HASHBIN_CLI_JAR:-$HERE/target/hashbin-cli-1.0.0-SNAPSHOT.jar}"
 JAVA_BIN="${JAVA_HOME:+$JAVA_HOME/bin/}java"
 
 pass() { echo "  PASS: $1"; }
 fail() { echo "  FAIL: $1"; exit 1; }
 
 [ -f "$JAR" ] || { echo "CLI jar not found at $JAR — run './mvnw -DskipTests package' first"; exit 1; }
-command -v "$JAVA_BIN" >/dev/null 2>&1 || { echo "java not found (set JAVA_HOME to a JDK 21)"; exit 1; }
+command -v "$JAVA_BIN" >/dev/null 2>&1 || { echo "java not found (set JAVA_HOME to a JDK 25)"; exit 1; }
 
 hashbin() { "$JAVA_BIN" -jar "$JAR" --api-base "$API_BASE" --hmac-secret "$SECRET" "$@"; }
 

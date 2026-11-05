@@ -16,13 +16,53 @@ auth/explore support.
 
 This is a **separate repository**, matching the rest of the
 [hashbin](#ecosystem) ecosystem. The CLI couples to the backend by its **API
-contract**, not by its Java classes — exactly how `hashbin-web` already works.
-Re-implementing the wire format (a few snake_case records + one HMAC-SHA256) is
-cheaper than maintaining a shared Maven module, and keeps the backend's
-deployable (one Quarkus app, one native image) untouched. If non-trivial
-signing/validation logic ever needs sharing, that is the trigger to factor a
-`hashbin-core` module across a new parent reactor. See the backend README's
-"Ecosystem" section.
+contract**, not by hand-written HTTP code: the backend publishes the
+[`hashbin-api`](../hashbin-backend/hashbin-api) Maven module — a client whose
+models and MicroProfile REST Client interfaces are **generated from the backend's
+live OpenAPI document** at its build time — and the CLI depends on it (see
+[API client](#api-client)). The wire format (routes, snake_case bodies, the
+`{"error": ...}` shape) therefore can never drift from the service. See the
+backend's `hashbin-api` README for how the contract is generated.
+
+## API client
+
+The CLI consumes the generated client as a Maven dependency rather than generating
+it locally:
+
+```xml
+<dependency>
+  <groupId>net.hashbin</groupId>
+  <artifactId>hashbin-api</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+</dependency>
+```
+
+- **What it provides:** `net.hashbin.api.model.*` (Jackson POJOs), the
+  `net.hashbin.api.{Timestamps,Auth,Health,Docs}Api` MicroProfile REST Client
+  interfaces, `ApiException`/`ApiExceptionMapper`, and a
+  `BearerClientHeadersFactory` — all generated from the backend's OpenAPI document
+  (`java` / `microprofile` generator), so they cannot drift from `hashbin-quarkus`.
+- **Build order:** it is built in the sibling `hashbin-backend` reactor. Install it
+  first (`(cd ../hashbin-backend && ./mvnw install -DskipTests)`) so the local
+  repository has it before building the CLI.
+- **Runtime:** `quarkus-rest-client-jackson` supplies the MicroProfile REST Client
+  implementation and Jackson body codec. `application.properties` indexes the
+  `hashbin-api` jar (`quarkus.index-dependency.hashbin-api.…`) so Quarkus discovers
+  the `@RegisterRestClient` interfaces.
+
+[`HashbinClient`](src/main/java/net/hashbin/cli/client/HashbinClient.java) is a
+thin **facade** over those generated `*Api` interfaces: it builds each client with
+`RestClientBuilder` (server root = the configured base minus `/api`, since the
+generated interfaces declare `@Path("/api")`), attaches the bearer token via
+`BearerClientHeadersFactory`, maps the generated DTOs onto the CLI's stable models
+(`TimestampRecord`, …), and translates `net.hashbin.api.ApiException` (and transport
+failures) into the CLI's own `ApiException`. Commands and tests are unaware of it.
+
+> A few endpoints (`/health`, `/auth/login`) are declared with a loose schema in
+> the backend's OpenAPI document, so the generated client returns a raw `Object`
+> (a Jackson `Map`). The facade reads the few fields it needs from that map.
+
+
 
 ## Ecosystem
 
@@ -33,23 +73,30 @@ signing/validation logic ever needs sharing, that is the trigger to factor a
 
 ## Requirements
 
-- **JDK 21** to build/run the JVM jar (Quarkus's bundled toolchain rejects JDK 25
-  class files). Run `./mvnw` with `JAVA_HOME` pointed at a 21.
+- **JDK 25** to build/run (aligned with the ARK `quarkus-templates/commandline`
+  template). Run `./mvnw` with `JAVA_HOME` pointed at a 25.
 - **Maven 3.9+** (the wrapper downloads it).
-- A **container engine** (Docker/Podman) only if you build the **native** binary.
+- The sibling **`hashbin-api`** client artifact in the local repository: build the
+  backend first with `(cd ../hashbin-backend && ./mvnw install -DskipTests)`.
+- **GraalVM/Mandrel** native toolchain (`native-image` on `PATH`) **or** a container
+  engine (Docker/Podman, via `-Dquarkus.native.container-build=true`) only if you
+  build the **native** binary.
 
 ## Build & run (JVM)
 
+`package` produces a single self-contained executable jar (uber-jar, no `-runner`
+suffix):
+
 ```bash
-export JAVA_HOME=<a JDK 21>
+export JAVA_HOME=<a JDK 25>
 ./mvnw -DskipTests package
-java -jar target/quarkus-app/quarkus-run.jar --help
+java -jar target/hashbin-cli-1.0.0-SNAPSHOT.jar --help
 ```
 
 ## Commands
 
 ```
-hashbin [--api-base URL] [--hmac-secret SECRET] [--token JWT] COMMAND
+hashbin [--api-base URL] [--hmac-secret SECRET] [--token JWT] [-v] COMMAND
 
   health                      Check API availability
   stamp FILE... [--include-name]   Hash files locally and create signed timestamps
@@ -60,6 +107,13 @@ hashbin [--api-base URL] [--hmac-secret SECRET] [--token JWT] COMMAND
   auth login    --email E [--password P]   Sign in, store the access token
   auth me                      Show the signed-in account
   explore [--limit N] [--offset N]         List recent public timestamps
+  license                      Show the license
+  changelog                    Show the changelog
+  help                         Show help for a command
+  generate-completion          Emit a bash/zsh shell-completion script
+
+  -v, --verbose                Raise this app's log level to DEBUG for the run
+  --version                    Print build/Java/OS details and exit
 ```
 
 Examples:
@@ -102,27 +156,58 @@ it to an RFC 4231 vector so the two can't silently diverge.
 ## Native binary (recommended for a CLI)
 
 ```bash
-export JAVA_HOME=<a JDK 21>
+export JAVA_HOME=<a JDK 25>
 ./mvnw -Dnative -DskipTests package
-./target/hashbin-cli-1.0.0-SNAPSHOT-runner --help
+./target/hashbin-cli-1.0.0-SNAPSHOT --help
 ```
 
-Compiles inside a Mandrel container (no local GraalVM/Mandrel install needed), so
-only a container engine is required. The resulting binary starts in milliseconds.
+By default this builds with a **local GraalVM/Mandrel** toolchain (`native-image` on
+`PATH`). To build inside a container instead — no local GraalVM install, just a
+container engine — add the opt‑in flag:
+
+```bash
+./mvnw -Dnative -DskipTests package -Dquarkus.native.container-build=true
+```
+
+The resulting binary starts in milliseconds. (`add-runner-suffix=false` means the
+binary has no `-runner` suffix.)
+
+## Container images
+
+JVM and native recipes live under `src/main/docker/` (`Dockerfile.jvm`,
+`Dockerfile.native`, `Dockerfile.native-micro`). Build the artifact first
+(`./mvnw package [-Dnative]`), then the image, e.g.:
+
+```bash
+./mvnw package -DskipTests
+docker build -f src/main/docker/Dockerfile.jvm -t hashbin/hashbin-cli-jvm .
+docker run --rm hashbin/hashbin-cli-jvm health
+```
+
+A CI recipe (`Dockerfile.ci` + `ci/Jenkinsfile`) is intentionally not added yet; the
+`DockerfileConsistencyTest` guard that pairs `Dockerfile.ci` with `Dockerfile.jvm`
+skips until that file is present.
 
 ## Tests
 
 ```bash
-export JAVA_HOME=<a JDK 21>
-./mvnw test
+export JAVA_HOME=<a JDK 25>
+./mvnw test          # unit + in-JVM @QuarkusMainTest command tests
+./mvnw verify        # + real-process integration tests (ITs) against the packaged jar
 ```
 
 - Unit: HMAC (RFC 4231 vector), file digest vectors, size/hex formatting, and
-  signature verification (valid / tampered / wrong-secret).
-- `HashbinCliContractTest`: drives the **real command tree** against a throwaway
-  `com.sun.net.httpserver` stub that speaks the wire contract — proving arg
-  parsing, JSON binding, signature verification and exit codes with no live
-  backend.
+  signature verification (valid / tampered / wrong-secret). Plus `LicenseDeclarationTest`
+  (pom license matches `LICENSE.txt`) and `DockerfileConsistencyTest`.
+- `MainCommandTest` (`@QuarkusMainTest` + `@Launch`): `--version`, `--help`, `license`,
+  `changelog` in-JVM.
+- `HashbinCliContractTest` (`@QuarkusMainTest` + `@Launch`): drives the **real command
+  tree** against a throwaway `com.sun.net.httpserver` stub on a fixed port that speaks the
+  wire contract — proving arg parsing, JSON binding, signature verification and exit codes
+  with no live backend.
+- `CommandLineIT` (`@QuarkusMainIntegrationTest`): runs the packaged artifact in a real
+  process and asserts exit codes survive end to end.
+- JaCoCo writes a coverage report to `target/site/jacoco` during the `test` phase.
 
 ## Contract check against a live backend
 
@@ -139,18 +224,34 @@ signature verifies against the real server secret. This mirrors the backend's
 ## Decisions & gotchas
 
 - **No HTTP server on the classpath.** A Picocli CLI must boot, run one command,
-  and exit. We depend on `quarkus-picocli` + `quarkus-jackson` only; outbound calls
-  use the JDK `java.net.http.HttpClient` (GraalVM-native supported). Adding
-  `quarkus-rest`/`undertow` would keep the JVM alive and bloat the native image.
-- **`@RegisterForReflection` on every model.** The models are bound from
-  `JsonNode`; without the annotation the JVM tests pass but the **native** image
-  deserializes to empty objects. Same gotcha the backend documents.
-- **Config resolution is plain Java, not MicroProfile.** `HashbinCommand` resolves
-  flag→env→default itself so the whole tree runs under a bare
-  `new CommandLine(new HashbinCommand())` in tests, with no CDI container.
-- **Subcommands use `@ParentCommand`**, not CDI injection — they're instantiated by
-  Picocli's reflection factory, which is why the leaf commands are plain classes.
+  and exit. We depend on `quarkus-picocli` + `quarkus-jackson` +
+  `quarkus-rest-client-jackson` only (outbound calls go through the MicroProfile
+  REST Client in `hashbin-api`); no `quarkus-rest`/`undertow`, which would keep the
+  JVM alive and bloat the native image. The Quarkus REST Client is GraalVM-native
+  supported.
+- **`@RegisterForReflection` on the models bound by Jackson.** The `hashbin-api`
+  DTOs are (de)serialized by the REST Client's Jackson provider; the native image
+  needs them registered or they bind to empty objects. They live in a dependency
+  jar and are never hand-edited, so a holder
+  ([`GeneratedModelsForReflection`](src/main/java/net/hashbin/cli/client/GeneratedModelsForReflection.java))
+  registers them via `@RegisterForReflection(targets = …)`. Same gotcha the
+  backend documents.
+- **Config resolution is plain Java, via the CDI bridge.** `CliConfigProducer` is an
+  `@ApplicationScoped` `@Produces` method that reads the global options from Quarkus Picocli's
+  injected `CommandLine.ParseResult` and surfaces them as an injectable `CliConfig` bean
+  (flag→env→default/stored). Commands `@Inject CliConfig` instead of walking the command tree.
+  `CliConfig` is a lombok `@Value @Builder` bean (fluent accessors via `lombok.config`), kept
+  `@ApplicationScoped` (a **lazy proxy**) so the producer runs only when a command reads a value
+  at execution time, after `ParseResult` is resolved — a `@Singleton`/eager read would cycle with
+  the Picocli command build. The `token`/`hmacSecret` fields are `@ToString.Exclude`d so they
+  never leak into a log line.
+- **Commands build the REST client at execution time** (`new HashbinClient(config.apiBase())`)
+  rather than injecting it, so building the client never forces eager `CliConfig` resolution
+  during the command build.
+- **A global `GlobalExceptionHandler` is the safety net**, wired via `setExecutionExceptionHandler`
+  in `Main.run`. The commands still catch `ApiException` themselves (to print the server's
+  `{"error": ...}` in the CLI's `✗` style); the handler covers anything that escapes.
 
 ## License
 
-Apache-2.0 — see [LICENSE](LICENSE).
+Apache-2.0 — see [LICENSE.txt](LICENSE.txt).

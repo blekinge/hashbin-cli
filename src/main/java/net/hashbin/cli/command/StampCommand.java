@@ -7,14 +7,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 
+import jakarta.inject.Inject;
+
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
-import picocli.CommandLine.ParentCommand;
 
-import net.hashbin.cli.client.ApiException;
+import net.hashbin.cli.client.HashbinClient;
+import net.hashbin.cli.config.CliConfig;
 import net.hashbin.cli.model.TimestampRecord;
-import net.hashbin.cli.util.Cli;
 import net.hashbin.cli.util.Console;
 import net.hashbin.cli.util.Digest;
 import net.hashbin.cli.util.Fmt;
@@ -28,8 +29,8 @@ import net.hashbin.cli.util.TimestampFormat;
 @Command(name = "stamp", description = "Hash files and create signed timestamps")
 public class StampCommand implements Callable<Integer> {
 
-    @ParentCommand
-    HashbinCommand root;
+    @Inject
+    CliConfig config;
 
     @Parameters(arity = "1..*", paramLabel = "FILE", description = "Files to timestamp")
     List<Path> files;
@@ -39,8 +40,9 @@ public class StampCommand implements Callable<Integer> {
 
     @Override
     public Integer call() {
-        String secret = root.resolveSecret();
-        String token = root.resolveToken();
+        String secret = config.hmacSecret();
+        String token = config.token();
+        HashbinClient client = new HashbinClient(config.apiBase());
         boolean allOk = true;
 
         for (Path file : files) {
@@ -50,7 +52,7 @@ public class StampCommand implements Callable<Integer> {
                 continue;
             }
             try {
-                allOk &= stampOne(file, secret, token);
+                allOk &= stampOne(client, file, secret, token);
             } catch (Exception e) {
                 System.out.println(Console.red("✗ ") + file.getFileName() + ": " + e.getMessage());
                 allOk = false;
@@ -59,7 +61,7 @@ public class StampCommand implements Callable<Integer> {
         return allOk ? 0 : 1;
     }
 
-    private boolean stampOne(Path file, String secret, String token) throws Exception {
+    private boolean stampOne(HashbinClient client, Path file, String secret, String token) throws Exception {
         String name = file.getFileName().toString();
         System.out.println();
         System.out.println(Console.bold("Hashing ") + Console.cyan(name) + " …");
@@ -78,7 +80,7 @@ public class StampCommand implements Callable<Integer> {
             payload.put("file_name", name);
         }
 
-        TimestampRecord created = root.client().stamp(payload, token);
+        TimestampRecord created = client.stamp(payload, token);
         System.out.println("  " + Console.green("✓ Timestamped at ") + created.createdAt);
         TimestampFormat.print(1, created, secret);
         return true;

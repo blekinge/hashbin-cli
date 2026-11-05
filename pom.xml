@@ -7,6 +7,7 @@
   <groupId>net.hashbin</groupId>
   <artifactId>hashbin-cli</artifactId>
   <version>1.0.0-SNAPSHOT</version>
+  <packaging>quarkus</packaging>
   <name>Hashbin CLI</name>
   <description>Command line client for the hashbin.net trusted file-timestamping service (Quarkus Picocli)</description>
 
@@ -19,15 +20,23 @@
   </licenses>
 
   <properties>
-    <compiler-plugin.version>3.13.0</compiler-plugin.version>
-    <maven.compiler.release>21</maven.compiler.release>
+    <compiler-plugin.version>3.15.0</compiler-plugin.version>
+    <maven.compiler.release>25</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
     <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
-    <!-- Keep aligned with the sibling hashbin-quarkus backend BOM. -->
-    <quarkus.platform.version>3.40.1</quarkus.platform.version>
-    <surefire-plugin.version>3.5.2</surefire-plugin.version>
+    <!-- Aligned with the ARK quarkus-templates/commandline template. -->
+    <quarkus.platform.version>3.40.1.1</quarkus.platform.version>
+    <surefire-plugin.version>3.5.6</surefire-plugin.version>
+    <jacoco-plugin.version>0.8.16</jacoco-plugin.version>
+    <lombok.version>1.18.48</lombok.version>
+    <assertj.version>3.27.7</assertj.version>
+    <skipITs>false</skipITs>
+    <!-- The hashbin REST client lives in the sibling backend repo, GENERATED at
+         the backend's build time from its own OpenAPI document (net.hashbin.api.*).
+         Consumed here as a Maven dependency so the wire contract cannot drift. -->
+    <hashbin-api.version>1.0.0-SNAPSHOT</hashbin-api.version>
   </properties>
 
   <dependencyManagement>
@@ -48,6 +57,16 @@
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-picocli</artifactId>
     </dependency>
+    <!-- Build/git/java/os metadata backing the version option (VersionProvider). -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-info</artifactId>
+    </dependency>
+    <!-- CDI container (command instances are created through the Picocli CDI factory). -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-arc</artifactId>
+    </dependency>
 
     <!-- JSON parsing/serialization for the wire contract (snake_case). -->
     <dependency>
@@ -55,65 +74,153 @@
       <artifactId>quarkus-jackson</artifactId>
     </dependency>
 
+    <!-- The hashbin REST client: a MicroProfile REST Client interface + Jackson
+         models generated from the backend's live OpenAPI contract. -->
+    <dependency>
+      <groupId>net.hashbin</groupId>
+      <artifactId>hashbin-api</artifactId>
+      <version>${hashbin-api.version}</version>
+    </dependency>
+
+    <!-- Runtime implementation for the MicroProfile REST Client interfaces that
+         hashbin-api only supplies the API for (those jars are `provided`). The
+         Jackson variant registers JSON body readers/writers so the generated
+         models (de)serialize over the wire. Quarkus supplies the GraalVM-native
+         wiring, keeping the CLI binary buildable. -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-rest-client-jackson</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <version>${lombok.version}</version>
+      <scope>compile</scope>
+    </dependency>
+
     <!-- NOTE: intentionally NO quarkus-rest / quarkus-undertow: a Picocli CLI must
          boot, run one command and exit, with no HTTP server on the classpath. Outbound
-         calls use the JDK java.net.http.HttpClient (GraalVM-native supported). -->
+         calls go through the MicroProfile REST Client (hashbin-api) backed by this. -->
 
     <!-- Test -->
     <dependency>
       <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-junit5</artifactId>
+      <artifactId>quarkus-junit</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
-      <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter</artifactId>
+      <groupId>org.assertj</groupId>
+      <artifactId>assertj-core</artifactId>
+      <version>${assertj.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
 
   <build>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+      </resource>
+      <resource>
+        <directory>.</directory>
+        <!-- Bundled so the optional `license` / `changelog` subcommands (LicenseCommand /
+             ChangelogCommand) can print them; needed in JVM mode and, with their
+             @RegisterResources, in the native image. Delete this block with those commands
+             if the CLI ever stops shipping them. -->
+        <includes>
+          <include>LICENSE.txt</include>
+          <include>CHANGELOG.md</include>
+        </includes>
+      </resource>
+    </resources>
     <plugins>
       <plugin>
         <groupId>${quarkus.platform.group-id}</groupId>
         <artifactId>quarkus-maven-plugin</artifactId>
         <version>${quarkus.platform.version}</version>
         <extensions>true</extensions>
-        <executions>
-          <execution>
-            <goals>
-              <goal>build</goal>
-              <goal>generate-code</goal>
-              <goal>generate-code-tests</goal>
-              <goal>native-image-agent</goal>
-            </goals>
-          </execution>
-        </executions>
       </plugin>
       <plugin>
         <artifactId>maven-compiler-plugin</artifactId>
         <version>${compiler-plugin.version}</version>
         <configuration>
           <parameters>true</parameters>
+          <annotationProcessorPaths>
+            <path>
+              <groupId>org.projectlombok</groupId>
+              <artifactId>lombok</artifactId>
+              <version>${lombok.version}</version>
+            </path>
+          </annotationProcessorPaths>
         </configuration>
       </plugin>
       <plugin>
         <artifactId>maven-surefire-plugin</artifactId>
         <version>${surefire-plugin.version}</version>
         <configuration>
+          <argLine>@{argLine}</argLine>
           <systemPropertyVariables>
             <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
             <maven.home>${maven.home}</maven.home>
+            <!-- Enables the auto-detected root extensions (TestMethodReporter,
+                 QuietLaunchExtension; META-INF/services registration). -->
+            <junit.jupiter.extensions.autodetection.enabled>true</junit.jupiter.extensions.autodetection.enabled>
           </systemPropertyVariables>
         </configuration>
+      </plugin>
+      <plugin>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <version>${surefire-plugin.version}</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <argLine>@{argLine}</argLine>
+          <systemPropertyVariables>
+            <native.image.path>${project.build.directory}/${project.build.finalName}</native.image.path>
+            <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
+            <maven.home>${maven.home}</maven.home>
+            <junit.jupiter.extensions.autodetection.enabled>true</junit.jupiter.extensions.autodetection.enabled>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+      <!-- Code coverage: prepare-agent sets the @{argLine} surefire/failsafe use;
+           report writes target/site/jacoco after the unit tests. -->
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <version>${jacoco-plugin.version}</version>
+        <executions>
+          <execution>
+            <id>default-prepare-agent</id>
+            <goals>
+              <goal>prepare-agent</goal>
+            </goals>
+          </execution>
+          <execution>
+            <id>default-report</id>
+            <phase>test</phase>
+            <goals>
+              <goal>report</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>
 
   <profiles>
-    <!-- Native binary for a snappy CLI. Compiles inside a Mandrel container, so no
-         local GraalVM/Mandrel install is required — only a container engine. Mirror
-         of the backend's `native` profile. Activate with -Pnative (or -Dnative). -->
+    <!-- Native binary for a snappy CLI. Activate with -Pnative (or -Dnative), which
+         also enables the failsafe integration tests against the built native image.
+         By default this builds with a local GraalVM/Mandrel toolchain (native-image on
+         PATH). To build inside a container with no local install, add
+         -Dquarkus.native.container-build=true. Mirrors the ARK commandline template. -->
     <profile>
       <id>native</id>
       <activation>
@@ -122,9 +229,9 @@
         </property>
       </activation>
       <properties>
-        <quarkus.native.enabled>true</quarkus.native.enabled>
         <quarkus.package.jar.enabled>false</quarkus.package.jar.enabled>
-        <quarkus.native.container-build>true</quarkus.native.container-build>
+        <skipITs>false</skipITs>
+        <quarkus.native.enabled>true</quarkus.native.enabled>
       </properties>
     </profile>
   </profiles>

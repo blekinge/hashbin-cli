@@ -1,0 +1,2 @@
+net.hashbin.cli.testsupport.TestMethodReporter
+net.hashbin.cli.testsupport.QuietLaunchExtension

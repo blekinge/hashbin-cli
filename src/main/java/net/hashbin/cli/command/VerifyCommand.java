@@ -5,12 +5,15 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.Callable;
 
+import jakarta.inject.Inject;
+
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
-import picocli.CommandLine.ParentCommand;
 
 import net.hashbin.cli.client.ApiException;
+import net.hashbin.cli.client.HashbinClient;
+import net.hashbin.cli.config.CliConfig;
 import net.hashbin.cli.model.TimestampRecord;
 import net.hashbin.cli.util.Cli;
 import net.hashbin.cli.util.Console;
@@ -26,8 +29,8 @@ import net.hashbin.cli.util.TimestampFormat;
 @Command(name = "verify", description = "Verify a file or hash against existing timestamps")
 public class VerifyCommand implements Callable<Integer> {
 
-    @ParentCommand
-    HashbinCommand root;
+    @Inject
+    CliConfig config;
 
     @Parameters(arity = "1", paramLabel = "FILE_OR_HASH", description = "File path or hex hash")
     String target;
@@ -38,7 +41,7 @@ public class VerifyCommand implements Callable<Integer> {
 
     @Override
     public Integer call() {
-        String secret = root.resolveSecret();
+        String secret = config.hmacSecret();
         String hash;
         String algo = algorithm;
 
@@ -61,7 +64,7 @@ public class VerifyCommand implements Callable<Integer> {
         }
 
         try {
-            List<TimestampRecord> records = root.client().verify(hash, algo);
+            List<TimestampRecord> records = new HashbinClient(config.apiBase()).verify(hash, algo);
             if (records.isEmpty()) {
                 Cli.warn("No timestamps found for this hash.");
                 return 0;

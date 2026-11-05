@@ -1,0 +1,39 @@
+####
+# Container image for the hashbin CLI, JVM mode, built from the packaged über-jar.
+#
+# Quarkus looks this file up BY NAME for `./mvnw quarkus:image-build`
+# (quarkus.docker.dockerfile-jvm-path defaults to src/main/docker/Dockerfile.jvm).
+#
+# 1. Build the über-jar:
+#      ./mvnw package
+#    quarkus.package.jar.type=uber-jar + add-runner-suffix=false produces a single
+#    target/hashbin-cli-1.0.0-SNAPSHOT.jar (no target/quarkus-app/ layout).
+#
+# 2. Build the image:
+#      docker build -f src/main/docker/Dockerfile.jvm -t hashbin/hashbin-cli-jvm .
+#
+# 3. Run it; arguments after the image name are passed straight to the CLI:
+#      docker run --rm hashbin/hashbin-cli-jvm verify --hmac-secret "$HASHBIN_HMAC_SECRET" report.pdf
+#
+# The HTTP server is disabled (quarkus.http.host-enabled=false): no port is exposed and
+# nothing listens, so this is safe to run as a Kubernetes Job/CronJob.
+#
+# Tune the JVM without rebuilding via -e JAVA_OPTS="-XX:MaxRAMPercentage=75".
+# After bumping artifactId/version, pass --build-arg APP_NAME=... APP_VERSION=... .
+###
+FROM registry.access.redhat.com/ubi9/openjdk-25-runtime:1.24
+
+ARG APP_NAME=hashbin-cli
+ARG APP_VERSION=1.0.0-SNAPSHOT
+
+ENV LANGUAGE='en_US:en'
+
+# Uber-jar is directly runnable; copy it as a stable, version-less path inside the image.
+COPY --chown=185 target/${APP_NAME}-${APP_VERSION}.jar /deployments/app.jar
+
+USER 185
+WORKDIR /deployments
+
+# exec + "$@" forwards `docker run <image> <args>` to the CLI; sh -c so JAVA_OPTS is expanded,
+# and exec makes the JVM PID 1 so it receives SIGTERM directly (graceful shutdown).
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -Djava.util.logging.manager=org.jboss.logmanager.LogManager -jar /deployments/app.jar \"$@\"", "--"]

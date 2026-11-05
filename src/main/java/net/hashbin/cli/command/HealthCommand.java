@@ -2,12 +2,13 @@ package net.hashbin.cli.command;
 
 import java.util.concurrent.Callable;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import jakarta.inject.Inject;
 
 import picocli.CommandLine.Command;
-import picocli.CommandLine.ParentCommand;
 
 import net.hashbin.cli.client.ApiException;
+import net.hashbin.cli.client.HashbinClient;
+import net.hashbin.cli.config.CliConfig;
 import net.hashbin.cli.util.Cli;
 import net.hashbin.cli.util.Console;
 
@@ -15,18 +16,18 @@ import net.hashbin.cli.util.Console;
 @Command(name = "health", description = "Check API availability")
 public class HealthCommand implements Callable<Integer> {
 
-    @ParentCommand
-    HashbinCommand root;
+    @Inject
+    CliConfig config;
 
     @Override
     public Integer call() {
         try {
-            JsonNode node = root.client().health();
-            if ("ok".equals(node.path("status").asText(null))) {
-                Cli.ok("hashbin API is healthy  " + Console.dim(root.resolveApiBase()));
+            String status = new HashbinClient(config.apiBase()).health();
+            if ("ok".equals(status)) {
+                Cli.ok("hashbin API is healthy  " + Console.dim(config.apiBase()));
                 return 0;
             }
-            System.out.println(Console.red("✗ ") + "unexpected response: " + node);
+            System.out.println(Console.red("✗ ") + "unexpected response: status=" + status);
             return 1;
         } catch (ApiException e) {
             return Cli.fail(e);

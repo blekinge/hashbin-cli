@@ -1,0 +1,35 @@
+####
+# Container image for the hashbin CLI as a native executable on a minimal base image
+# (smallest footprint). See https://quarkus.io/guides/quarkus-runtime-base-image.
+#
+# Helper image: it COPYs a binary you built first (for the JVM image see Dockerfile.jvm).
+#
+# 1. Build the native executable:
+#      ./mvnw package -Dnative
+#    add-runner-suffix=false means the binary is target/hashbin-cli-1.0.0-SNAPSHOT (no "-runner").
+#
+# 2. Build the image:
+#      docker build -f src/main/docker/Dockerfile.native-micro -t hashbin/hashbin-cli-micro .
+#
+# 3. Run it; arguments after the image name are passed straight to the CLI:
+#      docker run --rm hashbin/hashbin-cli-micro verify report.pdf
+#
+# The HTTP server is disabled (quarkus.http.host-enabled=false), so no port is exposed and
+# nothing listens -- safe to run as a Kubernetes Job/CronJob.
+#
+# After bumping artifactId/version, pass --build-arg APP_NAME=... APP_VERSION=... .
+###
+FROM quay.io/quarkus/ubi9-quarkus-micro-image:2.0
+
+ARG APP_NAME=hashbin-cli
+ARG APP_VERSION=1.0.0-SNAPSHOT
+
+WORKDIR /work/
+RUN chown 1001 /work \
+    && chmod "g+rwX" /work \
+    && chown 1001:root /work
+COPY --chown=1001:root --chmod=0755 target/${APP_NAME}-${APP_VERSION} /work/application
+
+USER 1001
+
+ENTRYPOINT ["./application"]

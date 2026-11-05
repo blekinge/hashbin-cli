@@ -4,12 +4,15 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.Callable;
 
+import jakarta.inject.Inject;
+
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
-import picocli.CommandLine.ParentCommand;
 import picocli.CommandLine.Spec;
 
 import net.hashbin.cli.client.ApiException;
+import net.hashbin.cli.client.HashbinClient;
+import net.hashbin.cli.config.CliConfig;
 import net.hashbin.cli.model.AuthResponse;
 import net.hashbin.cli.model.MeView;
 import net.hashbin.cli.store.CredentialsStore;
@@ -22,16 +25,14 @@ import net.hashbin.cli.util.Passwords;
  * Register and login store the returned bearer token in {@link CredentialsStore}
  * so later commands, and {@code stamp} attribution, pick it up automatically.
  *
- * <p>Subcommands are nested static classes and reach the global options via the
- * {@code root} parent chain: {@code Me → AuthCommand → HashbinCommand}.
+ * <p>Subcommands are nested static classes; the global config (API base, bearer token)
+ * reaches them through the injected {@link CliConfig}/{@link HashbinClient} beans rather
+ * than the command tree.
  */
 @Command(name = "auth",
         description = "Manage your hashbin account",
         subcommands = { AuthCommand.Register.class, AuthCommand.Login.class, AuthCommand.Me.class })
 public class AuthCommand implements Runnable {
-
-    @ParentCommand
-    HashbinCommand root;
 
     @Spec
     picocli.CommandLine.Model.CommandSpec spec;
@@ -43,8 +44,8 @@ public class AuthCommand implements Runnable {
 
     /** Shared email/password + token-persistence handling for register + login. */
     abstract static class CredentialsBase implements Callable<Integer> {
-        @ParentCommand
-        AuthCommand auth;
+        @Inject
+        CliConfig config;
 
         @Option(names = "--email", paramLabel = "EMAIL", required = true, description = "Account email")
         String email;
@@ -52,10 +53,6 @@ public class AuthCommand implements Runnable {
         @Option(names = "--password", paramLabel = "PASSWORD",
                 description = "Password (omit to be prompted, or set HASHBIN_PASSWORD)")
         String password;
-
-        HashbinCommand root() {
-            return auth.root;
-        }
 
         String resolvePassword() {
             if (password != null && !password.isBlank()) {
@@ -71,11 +68,16 @@ public class AuthCommand implements Runnable {
 
         void persist(AuthResponse r) {
             Map<String, Object> fields = new LinkedHashMap<>();
-            fields.put("api_base", root().resolveApiBase());
+            fields.put("api_base", config.apiBase());
             fields.put("email", r.email != null ? r.email : email);
             fields.put("user_id", r.userId);
             fields.put("token", r.token);
             new CredentialsStore().save(fields);
+        }
+
+        /** REST client for the resolved API base; built at execution time from {@link #config}. */
+        HashbinClient client() {
+            return new HashbinClient(config.apiBase());
         }
     }
 
@@ -89,7 +91,7 @@ public class AuthCommand implements Runnable {
                 return 1;
             }
             try {
-                AuthResponse r = root().client().register(email, pass);
+                AuthResponse r = client().register(email, pass);
                 persist(r);
                 Cli.ok("Registered " + r.email + " — token stored.");
                 return 0;
@@ -109,7 +111,7 @@ public class AuthCommand implements Runnable {
                 return 1;
             }
             try {
-                AuthResponse r = root().client().login(email, pass);
+                AuthResponse r = client().login(email, pass);
                 persist(r);
                 Cli.ok("Logged in as " + r.email + " — token stored.");
                 return 0;
@@ -121,19 +123,18 @@ public class AuthCommand implements Runnable {
 
     @Command(name = "me", description = "Show the signed-in account")
     static class Me implements Callable<Integer> {
-        @ParentCommand
-        AuthCommand auth;
+        @Inject
+        CliConfig config;
 
         @Override
         public Integer call() {
-            HashbinCommand root = auth.root;
-            String token = root.resolveToken();
+            String token = config.token();
             if (token == null) {
                 System.out.println(Console.red("✗ ") + "Not signed in. Run `hashbin auth login`.");
                 return 1;
             }
             try {
-                MeView me = root.client().me(token);
+                MeView me = new HashbinClient(config.apiBase()).me(token);
                 Cli.ok(me.email + "  " + Console.dim("(id: " + me.userId + ")"));
                 return 0;
             } catch (ApiException e) {
