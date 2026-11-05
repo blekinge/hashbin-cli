@@ -39,10 +39,11 @@ import net.hashbin.cli.model.TimestampRecord;
  * <ul>
  *   <li>{@code @RegisterRestClient(configKey="hashbin")} — so {@code @RestClient} builds a
  *       proxy against {@code quarkus.rest-client.hashbin.url};</li>
- *   <li>{@code @RegisterProvider} ({@link ConditionalBearerFilter}) — adds
- *       {@code Authorization: Bearer} from the resolved {@link CliConfig} only to the
- *       token-bearing endpoints (a per-client {@code ClientHeadersFactory} cannot see the
- *       request path, so it would stamp every call);</li>
+ *   <li>{@code @RegisterProvider} ({@link ConditionalBearerFilter}) — where an interface has
+ *       token-bearing endpoints — adds {@code Authorization: Bearer} from the resolved
+ *       {@link CliConfig} only to those endpoints (a per-client {@code ClientHeadersFactory}
+ *       cannot see the request path, so it would stamp every call); {@code HashbinHealth}
+ *       omits it, being anonymous-only;</li>
  *   <li>{@code @RegisterProvider} ({@link BaseUriOverrideFilter}) — rewrites the request
  *       origin to {@code --api-base}, overriding the startup-bound config URL at request
  *       time so the runtime base URL is honoured.</li>
@@ -97,7 +98,7 @@ public class HashbinClient {
     @Singleton
     @RegisterRestClient(configKey = "hashbin")
     @RegisterProvider(BaseUriOverrideFilter.class)
-    @RegisterProvider(ConditionalBearerFilter.class)
+    // No bearer filter: /health is the only operation here and it is always anonymous.
     interface HashbinHealth extends HealthResourceApi {
     }
 
