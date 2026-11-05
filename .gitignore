@@ -1,0 +1,22 @@
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# Quarkus
+.quarkus/
+*.env
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# OS
+.DS_Store
+
+# Local credentials written by `hashbin auth login` (only if pointed at a repo dir)
+credentials.json

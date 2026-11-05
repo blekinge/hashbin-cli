@@ -1,0 +1,13 @@
+# Trim the build context for the native container build (quarkus.native.container-build).
+# .git/ is the biggest win; docs/scripts/ci are never read by the image build, so
+# excluding them keeps the layer cache stable across documentation edits.
+
+.git/
+.gitignore
+.idea/
+.vscode/
+*.iml
+.quarkus/
+*.env
+docs/
+scripts/
