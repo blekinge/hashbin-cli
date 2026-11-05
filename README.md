@@ -53,10 +53,11 @@ it locally:
 [`HashbinClient`](src/main/java/net/hashbin/cli/client/HashbinClient.java) is an
 `@ApplicationScoped` facade that injects one configured `@RestClient` per generated
 `*Api`. For each interface it declares a local sub-interface that `extends` the generated
-one (which we don't own) and adds `@RegisterRestClient(configKey="hashbin")`,
-`@RegisterClientHeaders(CliBearerHeadersFactory)` (bearer from `CliConfig`) and
-`@RegisterProvider(BaseUriOverrideFilter)` — the same decorator pattern as
-`TkPrefetcherConnector`. No `RestClientBuilder`/`new` and no manual provider registration;
+one (which we don't own) and adds `@RegisterRestClient(configKey="hashbin")` plus two
+providers — `@RegisterProvider(BaseUriOverrideFilter)` (applies `--api-base` per request)
+and `@RegisterProvider(ConditionalBearerFilter)` (adds the bearer header only to the
+token-bearing endpoints) — the same decorator pattern as `TkPrefetcherConnector`. No
+`RestClientBuilder`/`new` and no manual provider registration;
 the facade maps the generated DTOs onto the CLI's stable models (`TimestampRecord`, …) and
 translates `net.hashbin.api.ApiException` (and transport failures) into the CLI's own
 `ApiException`. Commands and tests are unaware of it.
@@ -251,14 +252,16 @@ signature verifies against the real server secret. This mirrors the backend's
 - **The REST clients are injected, configured `@RestClient` beans.** `HashbinClient` is
   `@ApplicationScoped` and injects one `@RestClient` per generated interface. Each is a local
   sub-interface that `extends` the generated `*Api` (we don't own it) and decorates it with
-  `@RegisterRestClient(configKey="hashbin")`, `@RegisterClientHeaders(CliBearerHeadersFactory)`
-  (bearer from `CliConfig`) and `@RegisterProvider(BaseUriOverrideFilter)`. No
-  `RestClientBuilder`/`new` anywhere. This is the same pattern as `TkPrefetcherConnector`.
-- **`--api-base` works despite config-bound `@RestClient`.** `@RegisterRestClient` binds the
-  base URL from `quarkus.rest-client.hashbin.url` at startup (a placeholder), *before* picocli
-  parses args — so `BaseUriOverrideFilter` rewrites the request origin from `CliConfig` on every
-  call. Both the filter and the headers factory read `CliConfig` lazily (a normal-scoped proxy),
-  so nothing is resolved during the Picocli command build — which would otherwise cycle with
+  `@RegisterRestClient(configKey="hashbin")` and two `@RegisterProvider`s —
+  `BaseUriOverrideFilter` and `ConditionalBearerFilter`. No `RestClientBuilder`/`new`
+  anywhere. This is the same pattern as `TkPrefetcherConnector`.
+- **`--api-base` and the bearer token are applied per request, not at startup.**
+  `@RegisterRestClient` binds `quarkus.rest-client.hashbin.url` at boot (a placeholder),
+  *before* picocli parses args — so `BaseUriOverrideFilter` rewrites the origin from
+  `CliConfig` on every call, and `ConditionalBearerFilter` adds `Authorization: Bearer` only
+  to the token-bearing endpoints (`/stamp`, `/my-timestamps`, `/auth/me`), leaving anonymous
+  calls unauthenticated. Both filters read `CliConfig` lazily (a normal-scoped proxy), so
+  nothing is resolved during the Picocli command build — which would otherwise cycle with
   `ParseResult` production.
 - **A global `GlobalExceptionHandler` is the safety net**, wired via `setExecutionExceptionHandler`
   in `Main.run`. The commands still catch `ApiException` themselves (to print the server's

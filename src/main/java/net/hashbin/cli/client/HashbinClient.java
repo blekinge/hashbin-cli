@@ -9,7 +9,6 @@ import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import jakarta.ws.rs.core.Response;
 
-import org.eclipse.microprofile.rest.client.annotation.RegisterClientHeaders;
 import org.eclipse.microprofile.rest.client.annotation.RegisterProvider;
 import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
@@ -40,8 +39,10 @@ import net.hashbin.cli.model.TimestampRecord;
  * <ul>
  *   <li>{@code @RegisterRestClient(configKey="hashbin")} — so {@code @RestClient} builds a
  *       proxy against {@code quarkus.rest-client.hashbin.url};</li>
- *   <li>{@code @RegisterClientHeaders} ({@link CliBearerHeadersFactory}) — adds
- *       {@code Authorization: Bearer} from the resolved {@link CliConfig} to every call;</li>
+ *   <li>{@code @RegisterProvider} ({@link ConditionalBearerFilter}) — adds
+ *       {@code Authorization: Bearer} from the resolved {@link CliConfig} only to the
+ *       token-bearing endpoints (a per-client {@code ClientHeadersFactory} cannot see the
+ *       request path, so it would stamp every call);</li>
  *   <li>{@code @RegisterProvider} ({@link BaseUriOverrideFilter}) — rewrites the request
  *       origin to {@code --api-base}, overriding the startup-bound config URL at request
  *       time so the runtime base URL is honoured.</li>
@@ -81,22 +82,22 @@ public class HashbinClient {
 
     @Singleton
     @RegisterRestClient(configKey = "hashbin")
-    @RegisterClientHeaders(CliBearerHeadersFactory.class)
     @RegisterProvider(BaseUriOverrideFilter.class)
+    @RegisterProvider(ConditionalBearerFilter.class)
     interface HashbinTimestamps extends TimestampsApi {
     }
 
     @Singleton
     @RegisterRestClient(configKey = "hashbin")
-    @RegisterClientHeaders(CliBearerHeadersFactory.class)
     @RegisterProvider(BaseUriOverrideFilter.class)
+    @RegisterProvider(ConditionalBearerFilter.class)
     interface HashbinAuth extends AuthApi {
     }
 
     @Singleton
     @RegisterRestClient(configKey = "hashbin")
-    @RegisterClientHeaders(CliBearerHeadersFactory.class)
     @RegisterProvider(BaseUriOverrideFilter.class)
+    @RegisterProvider(ConditionalBearerFilter.class)
     interface HashbinHealth extends HealthResourceApi {
     }
 

@@ -7,6 +7,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -47,7 +48,12 @@ class HashbinCliContractTest {
     private static final String BASE = "http://127.0.0.1:18080/api";
     /** A port that requires privilege and is never bound → guarantees a connection-refused. */
     private static final String UNREACHABLE = "http://127.0.0.1:1/api";
+    private static final String TOKEN = "test-bearer-token";
     private static final ObjectMapper M = new ObjectMapper();
+
+    // Captured by the stub handlers to assert per-request bearer behaviour.
+    private static final AtomicReference<String> VERIFY_AUTH = new AtomicReference<>();
+    private static final AtomicReference<String> STAMP_AUTH = new AtomicReference<>();
 
     private static HttpServer server;
 
@@ -109,6 +115,22 @@ class HashbinCliContractTest {
         assertThat(result.getOutput()).contains("database unavailable");
     }
 
+    @Test
+    @Launch({"--api-base", BASE, "verify", SHA})
+    void anonymousVerifySendsNoBearer(LaunchResult result) {
+        // No token on the command line: the anonymous /verify call carries no Authorization.
+        assertThat(result.exitCode()).isZero();
+        assertThat(VERIFY_AUTH.get()).isNull();
+    }
+
+    @Test
+    @Launch({"--api-base", BASE, "--token", TOKEN, "stamp", "src/test/resources/fixtures/doc.txt"})
+    void stampSendsBearerWhenSignedIn(LaunchResult result) {
+        // With --token, the attributed /stamp call carries the bearer header.
+        assertThat(result.exitCode()).isZero();
+        assertThat(STAMP_AUTH.get()).isEqualTo("Bearer " + TOKEN);
+    }
+
     // ── stub handlers ────────────────────────────────────────────────────────
 
     private static void exploreFails(HttpExchange ex) throws java.io.IOException {
@@ -120,6 +142,7 @@ class HashbinCliContractTest {
     }
 
     private static void verify(HttpExchange ex) throws java.io.IOException {
+        VERIFY_AUTH.set(ex.getRequestHeaders().getFirst("Authorization"));
         String sha = SHA;
         String sig = Hmac.sign(SECRET, sha, CREATED_AT);
         String json = "[{\"id\":\"11111111-1111-1111-1111-111111111111\",\"hash_sha256\":\"" + sha
@@ -129,6 +152,7 @@ class HashbinCliContractTest {
 
     /** Acts like the real server: reads the digest, signs "{sha}:{created_at}". */
     private static void stamp(HttpExchange ex) throws java.io.IOException {
+        STAMP_AUTH.set(ex.getRequestHeaders().getFirst("Authorization"));
         String body = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
         JsonNode req = M.readTree(body);
         String sha = req.path("hash_sha256").asText("");
