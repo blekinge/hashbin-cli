@@ -17,12 +17,15 @@ import net.hashbin.cli.util.Console;
 public class HealthCommand implements Callable<Integer> {
 
     @Inject
+    HashbinClient client;
+
+    @Inject
     CliConfig config;
 
     @Override
     public Integer call() {
         try {
-            String status = new HashbinClient(config.apiBase()).health();
+            String status = client.health();
             if ("ok".equals(status)) {
                 Cli.ok("hashbin API is healthy  " + Console.dim(config.apiBase()));
                 return 0;

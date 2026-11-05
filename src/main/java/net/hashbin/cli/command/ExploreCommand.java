@@ -20,6 +20,9 @@ import net.hashbin.cli.util.TimestampFormat;
 public class ExploreCommand implements Callable<Integer> {
 
     @Inject
+    HashbinClient client;
+
+    @Inject
     CliConfig config;
 
     @Option(names = "--limit", paramLabel = "N", description = "Page size, 1-100 (default 20)")
@@ -31,7 +34,7 @@ public class ExploreCommand implements Callable<Integer> {
     @Override
     public Integer call() {
         try {
-            List<TimestampRecord> records = new HashbinClient(config.apiBase()).explore(limit, offset);
+            List<TimestampRecord> records = client.explore(limit, offset);
             if (records.isEmpty()) {
                 Cli.warn("No public timestamps.");
                 return 0;

@@ -20,6 +20,9 @@ import net.hashbin.cli.util.TimestampFormat;
 public class MyTimestampsCommand implements Callable<Integer> {
 
     @Inject
+    HashbinClient client;
+
+    @Inject
     CliConfig config;
 
     @Override
@@ -30,7 +33,7 @@ public class MyTimestampsCommand implements Callable<Integer> {
             return 1;
         }
         try {
-            List<TimestampRecord> records = new HashbinClient(config.apiBase()).myTimestamps(token);
+            List<TimestampRecord> records = client.myTimestamps(token);
             if (records.isEmpty()) {
                 Cli.warn("No timestamps recorded for this account.");
                 return 0;

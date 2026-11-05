@@ -245,9 +245,14 @@ signature verifies against the real server secret. This mirrors the backend's
   at execution time, after `ParseResult` is resolved — a `@Singleton`/eager read would cycle with
   the Picocli command build. The `token`/`hmacSecret` fields are `@ToString.Exclude`d so they
   never leak into a log line.
-- **Commands build the REST client at execution time** (`new HashbinClient(config.apiBase())`)
-  rather than injecting it, so building the client never forces eager `CliConfig` resolution
-  during the command build.
+- **The REST client is an injected `@ApplicationScoped` bean, not a `new`.** `HashbinClient`
+  is `@ApplicationScoped` and `@Inject`s `CliConfig`, resolving the base URL lazily — so it
+  honours `--api-base` (the URL comes from the command line via `CliConfig`, not from
+  MicroProfile config). Being normal-scoped means commands receive a lazy proxy, so building a
+  command during `ParseResult` production never eagerly triggers client/config creation
+  (that would cycle); the client is only realized when a command first calls it, at execution
+  time. Note the `@Inject @RestClient` pattern used by `ScoreBoardConnector`-style code would
+  *not* work here: it reads the base URL from config at startup, before `--api-base` is parsed.
 - **A global `GlobalExceptionHandler` is the safety net**, wired via `setExecutionExceptionHandler`
   in `Main.run`. The commands still catch `ApiException` themselves (to print the server's
   `{"error": ...}` in the CLI's `✗` style); the handler covers anything that escapes.

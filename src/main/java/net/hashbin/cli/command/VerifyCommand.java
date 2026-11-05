@@ -30,6 +30,9 @@ import net.hashbin.cli.util.TimestampFormat;
 public class VerifyCommand implements Callable<Integer> {
 
     @Inject
+    HashbinClient client;
+
+    @Inject
     CliConfig config;
 
     @Parameters(arity = "1", paramLabel = "FILE_OR_HASH", description = "File path or hex hash")
@@ -64,7 +67,7 @@ public class VerifyCommand implements Callable<Integer> {
         }
 
         try {
-            List<TimestampRecord> records = new HashbinClient(config.apiBase()).verify(hash, algo);
+            List<TimestampRecord> records = client.verify(hash, algo);
             if (records.isEmpty()) {
                 Cli.warn("No timestamps found for this hash.");
                 return 0;

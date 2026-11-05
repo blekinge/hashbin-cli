@@ -45,6 +45,9 @@ public class AuthCommand implements Runnable {
     /** Shared email/password + token-persistence handling for register + login. */
     abstract static class CredentialsBase implements Callable<Integer> {
         @Inject
+        HashbinClient client;
+
+        @Inject
         CliConfig config;
 
         @Option(names = "--email", paramLabel = "EMAIL", required = true, description = "Account email")
@@ -74,11 +77,6 @@ public class AuthCommand implements Runnable {
             fields.put("token", r.token);
             new CredentialsStore().save(fields);
         }
-
-        /** REST client for the resolved API base; built at execution time from {@link #config}. */
-        HashbinClient client() {
-            return new HashbinClient(config.apiBase());
-        }
     }
 
     @Command(name = "register", description = "Create an account and store its token")
@@ -91,7 +89,7 @@ public class AuthCommand implements Runnable {
                 return 1;
             }
             try {
-                AuthResponse r = client().register(email, pass);
+                AuthResponse r = client.register(email, pass);
                 persist(r);
                 Cli.ok("Registered " + r.email + " — token stored.");
                 return 0;
@@ -111,7 +109,7 @@ public class AuthCommand implements Runnable {
                 return 1;
             }
             try {
-                AuthResponse r = client().login(email, pass);
+                AuthResponse r = client.login(email, pass);
                 persist(r);
                 Cli.ok("Logged in as " + r.email + " — token stored.");
                 return 0;
@@ -124,6 +122,9 @@ public class AuthCommand implements Runnable {
     @Command(name = "me", description = "Show the signed-in account")
     static class Me implements Callable<Integer> {
         @Inject
+        HashbinClient client;
+
+        @Inject
         CliConfig config;
 
         @Override
@@ -134,7 +135,7 @@ public class AuthCommand implements Runnable {
                 return 1;
             }
             try {
-                MeView me = new HashbinClient(config.apiBase()).me(token);
+                MeView me = client.me(token);
                 Cli.ok(me.email + "  " + Console.dim("(id: " + me.userId + ")"));
                 return 0;
             } catch (ApiException e) {

@@ -8,6 +8,8 @@ import java.util.function.Supplier;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.ws.rs.core.Response;
 
 import org.eclipse.microprofile.rest.client.RestClientBuilder;
@@ -22,6 +24,7 @@ import net.hashbin.api.model.MeView;
 import net.hashbin.api.model.StampRequest;
 import net.hashbin.api.model.TimestampPublicView;
 import net.hashbin.api.model.TimestampView;
+import net.hashbin.cli.config.CliConfig;
 import net.hashbin.cli.model.AuthResponse;
 import net.hashbin.cli.model.TimestampRecord;
 
@@ -31,8 +34,10 @@ import net.hashbin.cli.model.TimestampRecord;
  * ({@code net.hashbin:hashbin-api} → {@code net.hashbin.api.*}, a MicroProfile
  * REST Client interface plus Jackson models).
  *
- * <p>This class is a thin <em>facade</em>: it owns the two things the generated
- * library cannot know about — the runtime base URL and the per-call bearer token —
+ * <p>This class is a thin <em>facade</em>, and an {@link ApplicationScoped} CDI bean so it
+ * can be injected once per run rather than constructed per call: it owns the two things the
+ * generated library cannot know about — the runtime base URL (read lazily from the injected
+ * {@link CliConfig}, so {@code --api-base} is honored) and the per-call bearer token —
  * and adapts the generated types to the CLI's own stable models
  * ({@link TimestampRecord}, {@link AuthResponse}, {@link net.hashbin.cli.model.MeView})
  * and its {@link ApiException}. Routing, (de)serialization and transport all live in
@@ -44,15 +49,20 @@ import net.hashbin.cli.model.TimestampRecord;
  * {@code /health} and {@code /auth/login}. The facade reads the fields it needs
  * out of that map rather than assuming a generated type exists for them.
  */
+@ApplicationScoped
 public class HashbinClient {
 
     /** Only used to read the {@code {"error": "..."}} message out of failed responses. */
     private static final ObjectMapper ERROR_MAPPER = new ObjectMapper();
 
-    private final String apiBase;
+    /** Resolved command-line configuration; the API base URL is read lazily from here. */
+    @Inject
+    CliConfig config;
 
-    public HashbinClient(String apiBase) {
-        this.apiBase = apiBase.endsWith("/") ? apiBase.substring(0, apiBase.length() - 1) : apiBase;
+    /** The configured API base URL (trailing slash trimmed), read from {@link #config}. */
+    private String apiBase() {
+        String base = config.apiBase();
+        return base.endsWith("/") ? base.substring(0, base.length() - 1) : base;
     }
 
     // ── Endpoints ───────────────────────────────────────────────────────────
@@ -125,7 +135,7 @@ public class HashbinClient {
     // ── Generated-client plumbing ───────────────────────────────────────────
 
     /**
-     * A generated {@code *Api} proxy pointed at {@link #apiBase}, with the bearer
+     * A generated {@code *Api} proxy pointed at the configured server root, with the bearer
      * token attached per-instance via {@link BearerClientHeadersFactory} (a null/blank
      * token adds no header, for anonymous endpoints) and {@link ApiExceptionMapper}
      * so any non-2xx raises the generated {@link net.hashbin.api.ApiException}.
@@ -144,7 +154,8 @@ public class HashbinClient {
      * root</em>; strip the trailing {@code /api} that the CLI's {@code apiBase} carries.
      */
     private String serverRoot() {
-        return apiBase.endsWith("/api") ? apiBase.substring(0, apiBase.length() - "/api".length()) : apiBase;
+        String base = apiBase();
+        return base.endsWith("/api") ? base.substring(0, base.length() - "/api".length()) : base;
     }
 
     private static StampRequest toStampRequest(Map<String, Object> payload) {
@@ -240,7 +251,7 @@ public class HashbinClient {
         } catch (RuntimeException e) {
             // No HTTP response produced: connection refused / DNS failure / interrupted.
             String cause = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            throw new ApiException(0, "API unreachable (" + apiBase + "): " + cause);
+            throw new ApiException(0, "API unreachable (" + apiBase() + "): " + cause);
         }
     }
 
@@ -250,7 +261,7 @@ public class HashbinClient {
         String body = readEntity(response);
         if (status == 0) {
             String cause = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            return new ApiException(0, "API unreachable (" + apiBase + "): " + cause);
+            return new ApiException(0, "API unreachable (" + apiBase() + "): " + cause);
         }
         String message = errorMessage(body);
         if (message == null) {

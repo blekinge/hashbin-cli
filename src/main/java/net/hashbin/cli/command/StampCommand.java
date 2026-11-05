@@ -30,6 +30,9 @@ import net.hashbin.cli.util.TimestampFormat;
 public class StampCommand implements Callable<Integer> {
 
     @Inject
+    HashbinClient client;
+
+    @Inject
     CliConfig config;
 
     @Parameters(arity = "1..*", paramLabel = "FILE", description = "Files to timestamp")
@@ -42,7 +45,6 @@ public class StampCommand implements Callable<Integer> {
     public Integer call() {
         String secret = config.hmacSecret();
         String token = config.token();
-        HashbinClient client = new HashbinClient(config.apiBase());
         boolean allOk = true;
 
         for (Path file : files) {
@@ -52,7 +54,7 @@ public class StampCommand implements Callable<Integer> {
                 continue;
             }
             try {
-                allOk &= stampOne(client, file, secret, token);
+                allOk &= stampOne(file, secret, token);
             } catch (Exception e) {
                 System.out.println(Console.red("✗ ") + file.getFileName() + ": " + e.getMessage());
                 allOk = false;
@@ -61,7 +63,7 @@ public class StampCommand implements Callable<Integer> {
         return allOk ? 0 : 1;
     }
 
-    private boolean stampOne(HashbinClient client, Path file, String secret, String token) throws Exception {
+    private boolean stampOne(Path file, String secret, String token) throws Exception {
         String name = file.getFileName().toString();
         System.out.println();
         System.out.println(Console.bold("Hashing ") + Console.cyan(name) + " …");
