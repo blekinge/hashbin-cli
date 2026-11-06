@@ -2,11 +2,12 @@ package net.hashbin.cli.util;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 
 /**
  * Computes MD5, SHA-1, SHA-256 and SHA-512 for a file in a single streaming pass, exactly like the
@@ -15,7 +16,7 @@ import java.security.NoSuchAlgorithmException;
  */
 public final class Digest {
 
-    private static final int CHUNK = 64 * 1024; // 64 KiB, same as the Python CLI
+    private static final HexFormat HEX = HexFormat.of();
 
     private Digest() {}
 
@@ -23,34 +24,34 @@ public final class Digest {
     public record FileHashes(String md5, String sha1, String sha256, String sha512, long size) {}
 
     public static FileHashes hashFile(Path file) throws IOException {
+        try (InputStream in = Files.newInputStream(file)) {
+            return hash(in);
+        }
+    }
+
+    /**
+     * Reads {@code in} to its end in a single pass, feeding every byte into all four digests, and
+     * returns the digests with the number of bytes read. Does not close {@code in}: the caller that
+     * owns the stream keeps responsibility for closing it. Package-private so tests can stream
+     * large payloads without touching disk.
+     */
+    static FileHashes hash(InputStream in) throws IOException {
         MessageDigest md5 = newDigest("MD5");
         MessageDigest sha1 = newDigest("SHA-1");
         MessageDigest sha256 = newDigest("SHA-256");
         MessageDigest sha512 = newDigest("SHA-512");
 
-        long size = 0;
-        byte[] buf = new byte[CHUNK];
-        try (InputStream in = Files.newInputStream(file)) {
-            int read;
-            while ((read = in.read(buf)) != -1) {
-                md5.update(buf, 0, read);
-                sha1.update(buf, 0, read);
-                sha256.update(buf, 0, read);
-                sha512.update(buf, 0, read);
-                size += read;
-            }
-        }
-        return new FileHashes(
-                toHex(md5.digest()),
-                toHex(sha1.digest()),
-                toHex(sha256.digest()),
-                toHex(sha512.digest()),
-                size);
-    }
+        // transferTo drives the reads and discards the content, returning the total byte count.
+        long size =
+                new ChecksumInputStream(in, md5, sha1, sha256, sha512)
+                        .transferTo(OutputStream.nullOutputStream());
 
-    /** Lowercase hex of a single SHA-256 of some text (used by tests). */
-    public static String sha256Hex(String text) {
-        return toHex(newDigest("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8)));
+        return new FileHashes(
+                HEX.formatHex(md5.digest()),
+                HEX.formatHex(sha1.digest()),
+                HEX.formatHex(sha256.digest()),
+                HEX.formatHex(sha512.digest()),
+                size);
     }
 
     private static MessageDigest newDigest(String algorithm) {
@@ -61,14 +62,5 @@ public final class Digest {
             // under a FIPS-restricted provider; surface a clear message.
             throw new IllegalStateException("Digest algorithm unavailable: " + algorithm, e);
         }
-    }
-
-    private static String toHex(byte[] bytes) {
-        StringBuilder hex = new StringBuilder(bytes.length * 2);
-        for (byte b : bytes) {
-            hex.append(Character.forDigit((b >> 4) & 0xf, 16));
-            hex.append(Character.forDigit(b & 0xf, 16));
-        }
-        return hex.toString();
     }
 }
