@@ -18,7 +18,9 @@ import picocli.CommandLine;
  * the whole tree behaves identically under {@code @QuarkusMainTest}:
  *
  * <ul>
- *   <li>API base: {@code --api-base} → {@code $HASHBIN_API_BASE} → {@value #DEFAULT_API_BASE}
+ *   <li>API base: {@code --api-base} → {@code $HASHBIN_API_BASE} → {@code https://hashbin.net/api},
+ *       resolved by Picocli's {@code defaultValue} interpolation, so the producer just reads the
+ *       bound value
  *   <li>HMAC secret: {@code --hmac-secret} → {@code $HASHBIN_HMAC_SECRET} → (none)
  *   <li>Token: {@code --token} → {@code $HASHBIN_TOKEN} → stored login credentials
  * </ul>
@@ -30,16 +32,12 @@ import picocli.CommandLine;
 @ApplicationScoped
 public class CliConfigProducer {
 
-    static final String DEFAULT_API_BASE = "http://localhost:8080/api";
-
     @Produces
     @ApplicationScoped
     public CliConfig create(CommandLine.ParseResult parseResult) {
-        String apiBase =
-                firstNonBlank(
-                        CommandUtils.rootOption(parseResult, "--api-base"),
-                        System.getenv("HASHBIN_API_BASE"),
-                        DEFAULT_API_BASE);
+        // --api-base already carries its env/default value: Picocli interpolates
+        // ${env:HASHBIN_API_BASE:-https://hashbin.net/api} into the bound option.
+        String apiBase = CommandUtils.rootOption(parseResult, "--api-base");
         String hmacSecret =
                 firstNonBlank(
                         CommandUtils.rootOption(parseResult, "--hmac-secret"),

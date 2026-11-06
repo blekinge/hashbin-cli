@@ -48,10 +48,8 @@ public class Main implements QuarkusApplication {
     @Option(
             names = "--api-base",
             paramLabel = "URL",
-            defaultValue = "https://hashbin.net/api",
-            description =
-                    "API base URL, e.g. https://hashbin.net/api "
-                            + "(env HASHBIN_API_BASE; default https://hashbin.net/api).")
+            defaultValue = "${env:HASHBIN_API_BASE:-https://hashbin.net/api}",
+            description = "API base URL (env HASHBIN_API_BASE; default https://hashbin.net/api).")
     String apiBase;
 
     @Option(
