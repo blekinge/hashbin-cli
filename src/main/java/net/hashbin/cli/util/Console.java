@@ -1,9 +1,20 @@
 package net.hashbin.cli.util;
 
+import net.hashbin.cli.client.ApiException;
+
 /**
- * Terminal colour helpers, mirroring the original Python CLI: coloured when the target stream is a
- * TTY and {@code NO_COLOR} is unset, plain otherwise. Colour is applied to stdout decisions only at
- * the command layer.
+ * Single home for terminal output, in three thin layers:
+ *
+ * <ul>
+ *   <li><b>styling</b> — {@code green/red/…} turn a string into a coloured one (coloured when the
+ *       target stream is a TTY and {@code NO_COLOR} is unset, plain otherwise), mirroring the
+ *       original Python CLI;
+ *   <li><b>writing</b> — {@code stdOutLn/stdErrLn} put a (possibly styled) line on a stream;
+ *   <li><b>status vocabulary</b> — {@code ok/warn/error} combine a glyph, colour and stream into the
+ *       CLI's conventional status lines.
+ * </ul>
+ *
+ * Exit-code decisions deliberately live in the command layer, not here.
  */
 public final class Console {
 
@@ -11,6 +22,8 @@ public final class Console {
             System.getenv("NO_COLOR") == null && System.console() != null;
 
     private Console() {}
+
+    // ---- styling: pure String -> String ----
 
     public static String green(String t) {
         return colorize("32", t);
@@ -40,6 +53,8 @@ public final class Console {
         return COLOR ? "\033[" + code + "m" + text + "\033[0m" : text;
     }
 
+    // ---- writing: raw lines to a stream ----
+
     public static void stdOutLn(final String x) {
         System.out.println(x);
     }
@@ -54,5 +69,29 @@ public final class Console {
 
     public static void stdErrLn() {
         System.err.println();
+    }
+
+    // ---- status vocabulary: styled line on the right stream ----
+
+    public static void ok(String message) {
+        stdOutLn(green("✓ ") + message);
+    }
+
+    public static void warn(String message) {
+        stdOutLn(yellow("⚠ ") + message);
+    }
+
+    public static void error(String message) {
+        stdErrLn(red("✗ ") + message);
+    }
+
+    public static void error(Throwable t) {
+        error(messageOf(t));
+    }
+
+    private static String messageOf(final Throwable t) {
+        return t instanceof ApiException
+                ? t.getMessage()
+                : (t.getMessage() != null ? t.getMessage() : t.toString());
     }
 }

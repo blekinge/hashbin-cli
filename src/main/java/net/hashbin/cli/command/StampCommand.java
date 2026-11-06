@@ -42,14 +42,14 @@ public class StampCommand implements Callable<Integer> {
 
         for (Path file : files) {
             if (!Files.isRegularFile(file)) {
-                Console.stdErrLn(Console.red("✗ Not a file: ") + file);
+                Console.error("Not a file: " + file);
                 allOk = false;
                 continue;
             }
             try {
                 allOk &= stampOne(file, secret);
             } catch (Exception e) {
-                Console.stdErrLn(Console.red("✗ ") + file.getFileName() + ": " + e.getMessage());
+                Console.error(file.getFileName() + ": " + e.getMessage());
                 allOk = false;
             }
         }

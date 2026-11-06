@@ -5,7 +5,6 @@ import java.util.concurrent.Callable;
 import net.hashbin.cli.client.ApiException;
 import net.hashbin.cli.client.HashbinClient;
 import net.hashbin.cli.config.CliConfig;
-import net.hashbin.cli.util.Cli;
 import net.hashbin.cli.util.Console;
 import picocli.CommandLine.Command;
 
@@ -22,13 +21,14 @@ public class HealthCommand implements Callable<Integer> {
         try {
             String status = client.health();
             if ("ok".equals(status)) {
-                Cli.ok("hashbin API is healthy  " + Console.dim(config.apiBase()));
+                Console.ok("hashbin API is healthy  " + Console.dim(config.apiBase()));
                 return 0;
             }
-            Console.stdErrLn(Console.red("✗ ") + "unexpected response: status=" + status);
+            Console.error("unexpected response: status=" + status);
             return 1;
         } catch (ApiException e) {
-            return Cli.fail(e);
+            Console.error(e);
+            return 1;
         }
     }
 }

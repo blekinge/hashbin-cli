@@ -9,7 +9,6 @@ import net.hashbin.cli.client.ApiException;
 import net.hashbin.cli.client.HashbinClient;
 import net.hashbin.cli.config.CliConfig;
 import net.hashbin.cli.model.TimestampRecord;
-import net.hashbin.cli.util.Cli;
 import net.hashbin.cli.util.Console;
 import net.hashbin.cli.util.Digest;
 import net.hashbin.cli.util.Fmt;
@@ -55,32 +54,31 @@ public class VerifyCommand implements Callable<Integer> {
                 Console.stdOutLn("  SHA-256: " + Console.dim(hash));
                 Console.stdOutLn("  Size:    " + Fmt.size(hashes.size()));
             } catch (Exception e) {
-                return Cli.fail(e);
+                Console.error(e);
+                return 1;
             }
         } else if (Fmt.looksLikeHexHash(target)) {
             hash = target.toLowerCase();
         } else {
-            Console.stdErrLn(
-                    Console.red("✗ '")
-                            + target
-                            + Console.red("' is not a valid hex hash or existing file"));
+            Console.error("'" + target + "' is not a valid hex hash or existing file");
             return 1;
         }
 
         try {
             List<TimestampRecord> records = client.verify(hash, algo);
             if (records.isEmpty()) {
-                Cli.warn("No timestamps found for this hash.");
+                Console.warn("No timestamps found for this hash.");
                 return 0;
             }
-            Cli.ok("Found " + records.size() + " timestamp(s):\n");
+            Console.ok("Found " + records.size() + " timestamp(s):\n");
             int i = 1;
             for (TimestampRecord r : records) {
                 TimestampFormat.print(i++, r, secret);
             }
             return 0;
         } catch (ApiException e) {
-            return Cli.fail(e);
+            Console.error(e);
+            return 1;
         }
     }
 

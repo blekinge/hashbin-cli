@@ -7,7 +7,6 @@ import net.hashbin.cli.client.ApiException;
 import net.hashbin.cli.client.HashbinClient;
 import net.hashbin.cli.config.CliConfig;
 import net.hashbin.cli.model.TimestampRecord;
-import net.hashbin.cli.util.Cli;
 import net.hashbin.cli.util.Console;
 import net.hashbin.cli.util.TimestampFormat;
 import picocli.CommandLine.Command;
@@ -26,25 +25,24 @@ public class MyTimestampsCommand implements Callable<Integer> {
     public Integer call() {
         String token = config.token();
         if (token == null) {
-            Console.stdErrLn(
-                    Console.red("✗ ")
-                            + "No token. Run `hashbin auth login` or pass --token / HASHBIN_TOKEN.");
+            Console.error("No token. Run `hashbin auth login` or pass --token / HASHBIN_TOKEN.");
             return 1;
         }
         try {
             List<TimestampRecord> records = client.myTimestamps();
             if (records.isEmpty()) {
-                Cli.warn("No timestamps recorded for this account.");
+                Console.warn("No timestamps recorded for this account.");
                 return 0;
             }
-            Cli.ok("Found " + records.size() + " timestamp(s):\n");
+            Console.ok("Found " + records.size() + " timestamp(s):\n");
             int i = 1;
             for (TimestampRecord r : records) {
                 TimestampFormat.print(i++, r, config.hmacSecret());
             }
             return 0;
         } catch (ApiException e) {
-            return Cli.fail(e);
+            Console.error(e);
+            return 1;
         }
     }
 }

@@ -7,7 +7,7 @@ import net.hashbin.cli.client.ApiException;
 import net.hashbin.cli.client.HashbinClient;
 import net.hashbin.cli.config.CliConfig;
 import net.hashbin.cli.model.TimestampRecord;
-import net.hashbin.cli.util.Cli;
+import net.hashbin.cli.util.Console;
 import net.hashbin.cli.util.TimestampFormat;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -39,17 +39,18 @@ public class ExploreCommand implements Callable<Integer> {
         try {
             List<TimestampRecord> records = client.explore(limit, offset);
             if (records.isEmpty()) {
-                Cli.warn("No public timestamps.");
+                Console.warn("No public timestamps.");
                 return 0;
             }
-            Cli.ok("Found " + records.size() + " timestamp(s):\n");
+            Console.ok("Found " + records.size() + " timestamp(s):\n");
             int i = 1;
             for (TimestampRecord record : records) {
                 TimestampFormat.print(i++, record, config.hmacSecret());
             }
             return 0;
         } catch (ApiException e) {
-            return Cli.fail(e);
+            Console.error(e);
+            return 1;
         }
     }
 }

@@ -10,7 +10,6 @@ import net.hashbin.cli.config.CliConfig;
 import net.hashbin.cli.model.AuthResponse;
 import net.hashbin.cli.model.MeView;
 import net.hashbin.cli.store.CredentialsStore;
-import net.hashbin.cli.util.Cli;
 import net.hashbin.cli.util.Console;
 import net.hashbin.cli.util.Passwords;
 import picocli.CommandLine.Command;
@@ -85,16 +84,17 @@ public class AuthCommand implements Runnable {
         public Integer call() {
             String pass = resolvePassword();
             if (pass == null) {
-                Console.stdErrLn(Console.red("✗ ") + "A password is required.");
+                Console.error("A password is required.");
                 return 1;
             }
             try {
                 AuthResponse r = client.register(email, pass);
                 persist(r);
-                Cli.ok("Registered " + r.email() + " — token stored.");
+                Console.ok("Registered " + r.email() + " — token stored.");
                 return 0;
             } catch (ApiException e) {
-                return Cli.fail(e);
+                Console.error(e);
+                return 1;
             }
         }
     }
@@ -105,16 +105,17 @@ public class AuthCommand implements Runnable {
         public Integer call() {
             String pass = resolvePassword();
             if (pass == null) {
-                Console.stdErrLn(Console.red("✗ ") + "A password is required.");
+                Console.error("A password is required.");
                 return 1;
             }
             try {
                 AuthResponse r = client.login(email, pass);
                 persist(r);
-                Cli.ok("Logged in as " + r.email() + " — token stored.");
+                Console.ok("Logged in as " + r.email() + " — token stored.");
                 return 0;
             } catch (ApiException e) {
-                return Cli.fail(e);
+                Console.error(e);
+                return 1;
             }
         }
     }
@@ -129,15 +130,16 @@ public class AuthCommand implements Runnable {
         public Integer call() {
             String token = config.token();
             if (token == null) {
-                Console.stdErrLn(Console.red("✗ ") + "Not signed in. Run `hashbin auth login`.");
+                Console.error("Not signed in. Run `hashbin auth login`.");
                 return 1;
             }
             try {
                 MeView me = client.me();
-                Cli.ok(me.email() + "  " + Console.dim("(id: " + me.userId() + ")"));
+                Console.ok(me.email() + "  " + Console.dim("(id: " + me.userId() + ")"));
                 return 0;
             } catch (ApiException e) {
-                return Cli.fail(e);
+                Console.error(e);
+                return 1;
             }
         }
     }
