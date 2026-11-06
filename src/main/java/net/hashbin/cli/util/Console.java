@@ -7,11 +7,11 @@ import net.hashbin.cli.client.ApiException;
  *
  * <ul>
  *   <li><b>styling</b> — {@code green/red/…} turn a string into a coloured one (coloured when the
- *       target stream is a TTY and {@code NO_COLOR} is unset, plain otherwise), mirroring the
- *       original Python CLI;
+ *       target stream is a TTY and {@code NO_COLOR} is unset, plain otherwise; null/blank text is
+ *       returned unchanged), mirroring the original Python CLI;
  *   <li><b>writing</b> — {@code stdOutLn/stdErrLn} put a (possibly styled) line on a stream;
- *   <li><b>status vocabulary</b> — {@code ok/warn/error} combine a glyph, colour and stream into the
- *       CLI's conventional status lines.
+ *   <li><b>status vocabulary</b> — {@code ok/warn/error} combine a glyph, colour and stream into
+ *       the CLI's conventional status lines.
  * </ul>
  *
  * Exit-code decisions deliberately live in the command layer, not here.
@@ -24,6 +24,8 @@ public final class Console {
     private Console() {}
 
     // ---- styling: pure String -> String ----
+    // Colour codes wrap non-blank text only; a null/blank input is returned unchanged (see
+    // colorize). Callers can therefore style a possibly-absent value and let the consumer decide.
 
     public static String green(String t) {
         return colorize("32", t);
@@ -50,6 +52,9 @@ public final class Console {
     }
 
     private static String colorize(String code, String text) {
+        if (text == null || text.isBlank()) {
+            return text;
+        }
         return COLOR ? "\033[" + code + "m" + text + "\033[0m" : text;
     }
 
