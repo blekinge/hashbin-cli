@@ -48,19 +48,11 @@ public final class Console {
         System.out.println();
     }
 
-    public static void stdOutLn(final Object anything) {
-        stdOutLn(anything.toString());
-    }
-
     public static void stdErrLn(final String x) {
         System.err.println(x);
     }
 
     public static void stdErrLn() {
         System.err.println();
-    }
-
-    public static void stdErrLn(final Object anything) {
-        stdErrLn(anything.toString());
     }
 }

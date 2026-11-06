@@ -17,10 +17,7 @@ public final class TimestampFormat {
      */
     public static void print(int heading, TimestampRecord r, String secret) {
         Console.stdOutLn(
-                new StringBuilder()
-                        .append(Console.bold("#" + heading))
-                        .append("  ")
-                        .append(r.createdAt() != null ? r.createdAt() : "?"));
+                Console.bold("#" + heading) + "  " + (r.createdAt() != null ? r.createdAt() : "?"));
         Console.stdOutLn("      SHA-256:   " + Console.dim(s(r.hashSha256())));
         if (notBlank(r.hashSha1())) {
             Console.stdOutLn("      SHA-1:     " + Console.dim(r.hashSha1()));
