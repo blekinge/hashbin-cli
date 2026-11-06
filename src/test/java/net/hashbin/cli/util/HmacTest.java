@@ -5,9 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import org.junit.jupiter.api.Test;
 
 /**
- * Proves the client HMAC matches an independent, authoritative source (RFC 4231
- * test case 2 for HMAC-SHA256). This is what lets the CLI trust that it
- * recomputes the same digest the backend's {@code HmacSigner} produces.
+ * Proves the client HMAC matches an independent, authoritative source (RFC 4231 test case 2 for
+ * HMAC-SHA256). This is what lets the CLI trust that it recomputes the same digest the backend's
+ * {@code HmacSigner} produces.
  */
 class HmacTest {
 

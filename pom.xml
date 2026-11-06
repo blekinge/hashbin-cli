@@ -30,6 +30,8 @@
     <quarkus.platform.version>3.40.1.1</quarkus.platform.version>
     <surefire-plugin.version>3.5.6</surefire-plugin.version>
     <jacoco-plugin.version>0.8.16</jacoco-plugin.version>
+    <spotless-plugin.version>2.44.4</spotless-plugin.version>
+    <google-java-format.version>1.35.0</google-java-format.version>
     <lombok.version>1.18.48</lombok.version>
     <assertj.version>3.27.7</assertj.version>
     <skipITs>false</skipITs>
@@ -135,6 +137,35 @@
       </resource>
     </resources>
     <plugins>
+      <!-- Source formatting: google-java-format in AOSP style (4-space indent).
+           `mvn spotless:apply` reformats; the `check` goal (bound to verify) fails the
+           build if anything drifts. -->
+      <plugin>
+        <groupId>com.diffplug.spotless</groupId>
+        <artifactId>spotless-maven-plugin</artifactId>
+        <version>${spotless-plugin.version}</version>
+        <configuration>
+          <java>
+            <includes>
+              <include>src/main/java/**/*.java</include>
+              <include>src/test/java/**/*.java</include>
+            </includes>
+            <googleJavaFormat>
+              <version>${google-java-format.version}</version>
+              <style>AOSP</style>
+            </googleJavaFormat>
+          </java>
+        </configuration>
+        <executions>
+          <execution>
+            <id>spotless-check</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>${quarkus.platform.group-id}</groupId>
         <artifactId>quarkus-maven-plugin</artifactId>

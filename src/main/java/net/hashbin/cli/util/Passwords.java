@@ -3,14 +3,13 @@ package net.hashbin.cli.util;
 import java.io.Console;
 
 /**
- * Reads a password from the terminal without echoing, falling back to stdin when
- * no interactive console is attached (e.g. piped input). Returns {@code null}
- * when nothing can be read. Named to avoid clashing with the colour helper.
+ * Reads a password from the terminal without echoing, falling back to stdin when no interactive
+ * console is attached (e.g. piped input). Returns {@code null} when nothing can be read. Named to
+ * avoid clashing with the colour helper.
  */
 public final class Passwords {
 
-    private Passwords() {
-    }
+    private Passwords() {}
 
     public static char[] readPassword(String prompt) {
         Console console = System.console();

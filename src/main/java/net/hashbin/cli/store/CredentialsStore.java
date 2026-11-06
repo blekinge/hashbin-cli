@@ -1,5 +1,6 @@
 package net.hashbin.cli.store;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -7,15 +8,13 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 /**
- * Minimal bearer-token cache so {@code login} need not be re-run for every
- * authenticated command. Written on {@code auth login}/{@code auth register},
- * read as the lowest-priority source of a token (after --token and $HASHBIN_TOKEN).
+ * Minimal bearer-token cache so {@code login} need not be re-run for every authenticated command.
+ * Written on {@code auth login}/{@code auth register}, read as the lowest-priority source of a
+ * token (after --token and $HASHBIN_TOKEN).
  *
- * <p>Location: {@code $XDG_CONFIG_HOME/hashbin/credentials.json} or
- * {@code ~/.config/hashbin/credentials.json}. Mode 0600 on POSIX.
+ * <p>Location: {@code $XDG_CONFIG_HOME/hashbin/credentials.json} or {@code
+ * ~/.config/hashbin/credentials.json}. Mode 0600 on POSIX.
  */
 public class CredentialsStore {
 
@@ -33,9 +32,10 @@ public class CredentialsStore {
 
     private static Path defaultPath() {
         String xdg = System.getenv("XDG_CONFIG_HOME");
-        Path base = (xdg != null && !xdg.isBlank())
-                ? Path.of(xdg)
-                : Path.of(System.getProperty("user.home"), ".config");
+        Path base =
+                (xdg != null && !xdg.isBlank())
+                        ? Path.of(xdg)
+                        : Path.of(System.getProperty("user.home"), ".config");
         return base.resolve("hashbin").resolve("credentials.json");
     }
 
@@ -53,8 +53,9 @@ public class CredentialsStore {
     public void save(Map<String, Object> fields) {
         try {
             Files.createDirectories(file.getParent());
-            byte[] json = MAPPER.writerWithDefaultPrettyPrinter()
-                    .writeValueAsBytes(new LinkedHashMap<>(fields));
+            byte[] json =
+                    MAPPER.writerWithDefaultPrettyPrinter()
+                            .writeValueAsBytes(new LinkedHashMap<>(fields));
             Files.write(file, json);
             restrictToOwner();
         } catch (IOException e) {

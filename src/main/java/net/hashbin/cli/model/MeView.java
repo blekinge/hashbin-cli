@@ -2,14 +2,16 @@ package net.hashbin.cli.model;
 
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
-
 import io.quarkus.runtime.annotations.RegisterForReflection;
+import lombok.Builder;
 
 /** Response for {@code GET /api/auth/me}. Mirrors the backend's {@code MeView}. */
 @RegisterForReflection
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class MeView {
+@Builder
+public record MeView(String userId, String email) {
 
-    public String userId;
-    public String email;
+    public static MeView map(final net.hashbin.api.model.MeView me) {
+        return builder().userId(me.getUserId()).email(me.getEmail()).build();
+    }
 }

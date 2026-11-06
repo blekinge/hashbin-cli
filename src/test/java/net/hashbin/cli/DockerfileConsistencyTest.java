@@ -7,7 +7,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 
 /**
@@ -31,14 +30,16 @@ class DockerfileConsistencyTest {
 
     @Test
     void testRuntimeStagesAgree() throws IOException {
-        assumeTrue(Files.isRegularFile(CI_DOCKERFILE) && Files.isRegularFile(JVM_DOCKERFILE),
-                   "no CI Dockerfile / source tree available; nothing to cross-check");
+        assumeTrue(
+                Files.isRegularFile(CI_DOCKERFILE) && Files.isRegularFile(JVM_DOCKERFILE),
+                "no CI Dockerfile / source tree available; nothing to cross-check");
 
         List<String> ci = finalStage(Files.readString(CI_DOCKERFILE));
         List<String> jvm = Files.readAllLines(JVM_DOCKERFILE);
 
         assertThat(baseImage(jvm))
-                .as("runtime base image: Dockerfile.ci's `final` stage and Dockerfile.jvm must be the same image")
+                .as(
+                        "runtime base image: Dockerfile.ci's `final` stage and Dockerfile.jvm must be the same image")
                 .isEqualTo(baseImage(ci));
         assertThat(directive(jvm, "ENTRYPOINT"))
                 .as("entrypoint: both images must forward arguments to the CLI the same way")
@@ -57,7 +58,8 @@ class DockerfileConsistencyTest {
         List<String> lines = dockerfile.lines().toList();
         for (int i = 0; i < lines.size(); i++) {
             String line = lines.get(i).trim();
-            if (line.regionMatches(true, 0, "FROM", 0, 4) && line.toLowerCase().matches(".*\\bas\\s+final$")) {
+            if (line.regionMatches(true, 0, "FROM", 0, 4)
+                    && line.toLowerCase().matches(".*\\bas\\s+final$")) {
                 return lines.subList(i, lines.size());
             }
         }
@@ -74,7 +76,10 @@ class DockerfileConsistencyTest {
                 .map(String::trim)
                 .filter(line -> !line.startsWith("#"))
                 .filter(line -> line.regionMatches(true, 0, name, 0, name.length()))
-                .filter(line -> line.length() == name.length() || Character.isWhitespace(line.charAt(name.length())))
+                .filter(
+                        line ->
+                                line.length() == name.length()
+                                        || Character.isWhitespace(line.charAt(name.length())))
                 .map(line -> line.substring(name.length()).trim())
                 .map(DockerfileConsistencyTest::normalise)
                 .findFirst()

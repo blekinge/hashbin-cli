@@ -1,15 +1,9 @@
 package net.hashbin.cli.command;
 
+import jakarta.inject.Inject;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.Callable;
-
-import jakarta.inject.Inject;
-
-import picocli.CommandLine.Command;
-import picocli.CommandLine.Option;
-import picocli.CommandLine.Spec;
-
 import net.hashbin.cli.client.ApiException;
 import net.hashbin.cli.client.HashbinClient;
 import net.hashbin.cli.config.CliConfig;
@@ -19,23 +13,25 @@ import net.hashbin.cli.store.CredentialsStore;
 import net.hashbin.cli.util.Cli;
 import net.hashbin.cli.util.Console;
 import net.hashbin.cli.util.Passwords;
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Option;
+import picocli.CommandLine.Spec;
 
 /**
- * {@code hashbin auth ...} — native email + password auth (register/login/me).
- * Register and login store the returned bearer token in {@link CredentialsStore}
- * so later commands, and {@code stamp} attribution, pick it up automatically.
+ * {@code hashbin auth ...} — native email + password auth (register/login/me). Register and login
+ * store the returned bearer token in {@link CredentialsStore} so later commands, and {@code stamp}
+ * attribution, pick it up automatically.
  *
- * <p>Subcommands are nested static classes; the global config (API base, bearer token)
- * reaches them through the injected {@link CliConfig}/{@link HashbinClient} beans rather
- * than the command tree.
+ * <p>Subcommands are nested static classes; the global config (API base, bearer token) reaches them
+ * through the injected {@link CliConfig}/{@link HashbinClient} beans rather than the command tree.
  */
-@Command(name = "auth",
+@Command(
+        name = "auth",
         description = "Manage your hashbin account",
-        subcommands = { AuthCommand.Register.class, AuthCommand.Login.class, AuthCommand.Me.class })
+        subcommands = {AuthCommand.Register.class, AuthCommand.Login.class, AuthCommand.Me.class})
 public class AuthCommand implements Runnable {
 
-    @Spec
-    picocli.CommandLine.Model.CommandSpec spec;
+    @Spec picocli.CommandLine.Model.CommandSpec spec;
 
     @Override
     public void run() {
@@ -44,16 +40,20 @@ public class AuthCommand implements Runnable {
 
     /** Shared email/password + token-persistence handling for register + login. */
     abstract static class CredentialsBase implements Callable<Integer> {
-        @Inject
-        HashbinClient client;
+        @Inject HashbinClient client;
 
-        @Inject
-        CliConfig config;
+        @Inject CliConfig config;
 
-        @Option(names = "--email", paramLabel = "EMAIL", required = true, description = "Account email")
+        @Option(
+                names = "--email",
+                paramLabel = "EMAIL",
+                required = true,
+                description = "Account email")
         String email;
 
-        @Option(names = "--password", paramLabel = "PASSWORD",
+        @Option(
+                names = "--password",
+                paramLabel = "PASSWORD",
                 description = "Password (omit to be prompted, or set HASHBIN_PASSWORD)")
         String password;
 
@@ -72,9 +72,9 @@ public class AuthCommand implements Runnable {
         void persist(AuthResponse r) {
             Map<String, Object> fields = new LinkedHashMap<>();
             fields.put("api_base", config.apiBase());
-            fields.put("email", r.email != null ? r.email : email);
-            fields.put("user_id", r.userId);
-            fields.put("token", r.token);
+            fields.put("email", r.email() != null ? r.email() : email);
+            fields.put("user_id", r.userId());
+            fields.put("token", r.token());
             new CredentialsStore().save(fields);
         }
     }
@@ -85,13 +85,13 @@ public class AuthCommand implements Runnable {
         public Integer call() {
             String pass = resolvePassword();
             if (pass == null) {
-                System.out.println(Console.red("✗ ") + "A password is required.");
+                Console.stdOutLn(Console.red("✗ ") + "A password is required.");
                 return 1;
             }
             try {
                 AuthResponse r = client.register(email, pass);
                 persist(r);
-                Cli.ok("Registered " + r.email + " — token stored.");
+                Cli.ok("Registered " + r.email() + " — token stored.");
                 return 0;
             } catch (ApiException e) {
                 return Cli.fail(e);
@@ -105,13 +105,13 @@ public class AuthCommand implements Runnable {
         public Integer call() {
             String pass = resolvePassword();
             if (pass == null) {
-                System.out.println(Console.red("✗ ") + "A password is required.");
+                Console.stdOutLn(Console.red("✗ ") + "A password is required.");
                 return 1;
             }
             try {
                 AuthResponse r = client.login(email, pass);
                 persist(r);
-                Cli.ok("Logged in as " + r.email + " — token stored.");
+                Cli.ok("Logged in as " + r.email() + " — token stored.");
                 return 0;
             } catch (ApiException e) {
                 return Cli.fail(e);
@@ -121,22 +121,20 @@ public class AuthCommand implements Runnable {
 
     @Command(name = "me", description = "Show the signed-in account")
     static class Me implements Callable<Integer> {
-        @Inject
-        HashbinClient client;
+        @Inject HashbinClient client;
 
-        @Inject
-        CliConfig config;
+        @Inject CliConfig config;
 
         @Override
         public Integer call() {
             String token = config.token();
             if (token == null) {
-                System.out.println(Console.red("✗ ") + "Not signed in. Run `hashbin auth login`.");
+                Console.stdOutLn(Console.red("✗ ") + "Not signed in. Run `hashbin auth login`.");
                 return 1;
             }
             try {
                 MeView me = client.me();
-                Cli.ok(me.email + "  " + Console.dim("(id: " + me.userId + ")"));
+                Cli.ok(me.email() + "  " + Console.dim("(id: " + me.userId() + ")"));
                 return 0;
             } catch (ApiException e) {
                 return Cli.fail(e);

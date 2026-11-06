@@ -9,20 +9,18 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 /**
- * Computes MD5, SHA-1, SHA-256 and SHA-512 for a file in a single streaming
- * pass, exactly like the original Python CLI's {@code hash_file}. Hex digests
- * are lowercase so they match the backend's validation patterns.
+ * Computes MD5, SHA-1, SHA-256 and SHA-512 for a file in a single streaming pass, exactly like the
+ * original Python CLI's {@code hash_file}. Hex digests are lowercase so they match the backend's
+ * validation patterns.
  */
 public final class Digest {
 
     private static final int CHUNK = 64 * 1024; // 64 KiB, same as the Python CLI
 
-    private Digest() {
-    }
+    private Digest() {}
 
     /** Immutable result of hashing one file. All digests are lowercase hex. */
-    public record FileHashes(String md5, String sha1, String sha256, String sha512, long size) {
-    }
+    public record FileHashes(String md5, String sha1, String sha256, String sha512, long size) {}
 
     public static FileHashes hashFile(Path file) throws IOException {
         MessageDigest md5 = newDigest("MD5");

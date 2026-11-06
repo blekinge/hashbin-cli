@@ -2,16 +2,15 @@ package net.hashbin.cli.command;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import org.junit.jupiter.api.Test;
-
 import io.quarkus.test.junit.main.Launch;
 import io.quarkus.test.junit.main.LaunchResult;
 import io.quarkus.test.junit.main.QuarkusMainTest;
+import org.junit.jupiter.api.Test;
 
 /**
- * In-JVM tests for the command-tree infrastructure that needs no backend: {@code --version}
- * (via {@link VersionProvider}), {@code --help}, and the bundled-resource {@code license} and
- * {@code changelog} commands.
+ * In-JVM tests for the command-tree infrastructure that needs no backend: {@code --version} (via
+ * {@link VersionProvider}), {@code --help}, and the bundled-resource {@code license} and {@code
+ * changelog} commands.
  */
 @QuarkusMainTest
 class MainCommandTest {

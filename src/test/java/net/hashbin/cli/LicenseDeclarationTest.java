@@ -8,7 +8,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 import org.junit.jupiter.api.Test;
 
 /**
@@ -29,8 +28,9 @@ class LicenseDeclarationTest {
     void testPomLicenseMatchesLicenseFile() throws IOException {
         Path pom = Path.of("pom.xml");
         Path licenseFile = Path.of("LICENSE.txt");
-        assumeTrue(Files.isRegularFile(pom) && Files.isRegularFile(licenseFile),
-                   "no source tree available (packaged build); nothing to cross-check");
+        assumeTrue(
+                Files.isRegularFile(pom) && Files.isRegularFile(licenseFile),
+                "no source tree available (packaged build); nothing to cross-check");
 
         String declared = declaredLicenseName(Files.readString(pom));
         assertThat(declared).as("pom.xml must declare a <licenses><name>").isNotBlank();
@@ -47,21 +47,25 @@ class LicenseDeclarationTest {
 
     /**
      * Builds the canonical name from a license text: its first non-blank line (the title, e.g.
-     * {@code "Apache License"}) followed by the version line up to its first comma
-     * ({@code "Version 2.0"}), giving {@code "Apache License, Version 2.0"}.
+     * {@code "Apache License"}) followed by the version line up to its first comma ({@code "Version
+     * 2.0"}), giving {@code "Apache License, Version 2.0"}.
      */
     private static String licenseNameFromText(String licenseText) {
-        String title = licenseText.lines()
-                .map(String::trim)
-                .filter(line -> !line.isEmpty())
-                .findFirst()
-                .orElse("");
-        String version = licenseText.lines()
-                .map(String::trim)
-                .filter(line -> line.startsWith("Version "))
-                .findFirst()
-                .map(line -> line.split(",")[0].trim())
-                .orElse("");
+        String title =
+                licenseText
+                        .lines()
+                        .map(String::trim)
+                        .filter(line -> !line.isEmpty())
+                        .findFirst()
+                        .orElse("");
+        String version =
+                licenseText
+                        .lines()
+                        .map(String::trim)
+                        .filter(line -> line.startsWith("Version "))
+                        .findFirst()
+                        .map(line -> line.split(",")[0].trim())
+                        .orElse("");
         return title + ", " + version;
     }
 }

@@ -2,12 +2,11 @@ package net.hashbin.cli.command;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import org.junit.jupiter.api.Test;
-
 import io.quarkus.test.junit.main.Launch;
 import io.quarkus.test.junit.main.LaunchResult;
 import io.quarkus.test.junit.main.QuarkusMainIntegrationTest;
 import io.quarkus.test.junit.main.QuarkusMainTest;
+import org.junit.jupiter.api.Test;
 
 /**
  * Runs the packaged artifact (the über-jar, or the native executable under {@code -Dnative}) in a
@@ -32,7 +31,9 @@ class CommandLineIT {
     }
 
     @Test
-    @Launch(value = {"license", "--nope"}, exitCode = 2)
+    @Launch(
+            value = {"license", "--nope"},
+            exitCode = 2)
     void testUsageErrorExitsNonZero(LaunchResult result) {
         // Proves Picocli's exit code survives to the real process exit status (a usage error is
         // 2), which is what a Job/CronJob keys off.

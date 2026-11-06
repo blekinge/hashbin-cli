@@ -1,12 +1,8 @@
 package net.hashbin.cli.command;
 
+import jakarta.inject.Inject;
 import java.util.List;
 import java.util.concurrent.Callable;
-
-import jakarta.inject.Inject;
-
-import picocli.CommandLine.Command;
-
 import net.hashbin.cli.client.ApiException;
 import net.hashbin.cli.client.HashbinClient;
 import net.hashbin.cli.config.CliConfig;
@@ -14,22 +10,25 @@ import net.hashbin.cli.model.TimestampRecord;
 import net.hashbin.cli.util.Cli;
 import net.hashbin.cli.util.Console;
 import net.hashbin.cli.util.TimestampFormat;
+import picocli.CommandLine.Command;
 
 /** {@code hashbin my-timestamps} — GET /api/my-timestamps (bearer token required). */
-@Command(name = "my-timestamps", description = "List your own timestamps (requires login or --token)")
+@Command(
+        name = "my-timestamps",
+        description = "List your own timestamps (requires login or --token)")
 public class MyTimestampsCommand implements Callable<Integer> {
 
-    @Inject
-    HashbinClient client;
+    @Inject HashbinClient client;
 
-    @Inject
-    CliConfig config;
+    @Inject CliConfig config;
 
     @Override
     public Integer call() {
         String token = config.token();
         if (token == null) {
-            System.out.println(Console.red("✗ ") + "No token. Run `hashbin auth login` or pass --token / HASHBIN_TOKEN.");
+            Console.stdOutLn(
+                    Console.red("✗ ")
+                            + "No token. Run `hashbin auth login` or pass --token / HASHBIN_TOKEN.");
             return 1;
         }
         try {

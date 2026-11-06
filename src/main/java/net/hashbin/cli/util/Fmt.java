@@ -1,24 +1,23 @@
 package net.hashbin.cli.util;
 
 /**
- * Small display/formatting helpers shared by the commands. Deliberately has no
- * Quarkus/Jackson dependency so it is trivially unit-testable.
+ * Small display/formatting helpers shared by the commands. Deliberately has no Quarkus/Jackson
+ * dependency so it is trivially unit-testable.
  */
 public final class Fmt {
 
-    private Fmt() {
-    }
+    private Fmt() {}
 
     /**
-     * Human-readable size, mirroring the original Python CLI's {@code fmt_size}
-     * (base-1024, one decimal, no decimals for bytes).
+     * Human-readable size, mirroring the original Python CLI's {@code fmt_size} (base-1024, one
+     * decimal, no decimals for bytes).
      */
     public static String size(long bytes) {
         if (bytes == 0) {
             return "0 B";
         }
         double n = bytes;
-        String[] units = { "B", "KB", "MB", "GB", "TB" };
+        String[] units = {"B", "KB", "MB", "GB", "TB"};
         int i = 0;
         while (Math.abs(n) >= 1024 && i < units.length - 1) {
             n /= 1024;

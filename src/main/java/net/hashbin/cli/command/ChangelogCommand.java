@@ -1,7 +1,6 @@
 package net.hashbin.cli.command;
 
 import io.quarkus.runtime.annotations.RegisterResources;
-
 import picocli.CommandLine;
 
 /** Prints the bundled {@code CHANGELOG.md} (copied onto the classpath by {@code pom.xml}). */
