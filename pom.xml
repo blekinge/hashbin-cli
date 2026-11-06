@@ -41,6 +41,25 @@
     <hashbin-api.version>1.0.0-SNAPSHOT</hashbin-api.version>
   </properties>
 
+  <!-- Resolution source for net.hashbin:hashbin-api at CI build time: the sibling backend repo
+       publishes it here (see its ci/Jenkinsfile 'Publish API artifact' stage). Declared in the pom
+       rather than settings.xml because it needs NO authentication (the ARK template rule: pom
+       <repositories> for unauthenticated repos, settings.xml for anything with credentials). Also
+       serves releases once the project is versioned. Locally the artifact usually resolves from
+       ~/.m2 via a sibling checkout instead (README "Requirements"). -->
+  <repositories>
+    <repository>
+      <id>sbforge-nexus</id>
+      <url>https://sbforge.org/nexus/content/groups/public</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>true</enabled>
+      </snapshots>
+    </repository>
+  </repositories>
+
   <dependencyManagement>
     <dependencies>
       <dependency>

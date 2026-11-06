@@ -1,0 +1,76 @@
+// Jenkins pipeline for hashbin-cli, the Quarkus CLI for the hashbin timestamping service.
+//
+// Primary artifact: the über-jar, published to SBForge's public Nexus via the shared `MavenBuild` library.
+// A CLI's consumers are workstations and CI scripts, which want a file addressable by Maven
+// coordinates; the container image (see the commented-out `DockerfileBuild` alternative below) is
+// only the right shape for Kubernetes Jobs/CronJobs and stays available as a manual recipe
+// (src/main/docker/Dockerfile.ci) until something actually pulls it from a Job.
+//
+// Why this file is at `ci/Jenkinsfile` and not at the repository root: the org runs two Jenkins controllers,
+// and each finds its pipelines by *path*. The legacy controller is configured with the Script Path
+// `Jenkinsfile`, the current one with `ci/Jenkinsfile`. A repository is therefore built by whichever
+// controller owns the path its file sits at, and the other one never creates a build for it -- so it posts no
+// commit status to Bitbucket at all, which is what keeps the PR gated by the real build alone. A guard inside
+// a Jenkinsfile cannot achieve that: branch indexing only checks that a file exists at the configured path and
+// never runs it, while anything written in the file runs in a build that has already started -- and a started
+// build is a build Bitbucket has already been told about, in progress, successful or failed.
+//
+// Moving a project from one controller to the other is therefore just a move of this file:
+// `git mv Jenkinsfile ci/Jenkinsfile` (and the reverse, should a project ever have to go back).
+//
+// Maven resolution and deploy credentials both come from the withMaven() environment inside the
+// library: the Jenkins controller's global Maven settings supply the mirrors (so dependency
+// resolution works without any project-specific configuration) and must supply the
+// `<server id="sbforge-nexus">` credential the deploy authenticates with. The pom's
+// `sbforge-nexus` profile declares the URLs only, so no credential ever enters version
+// control.
+library identifier: 'MavenBuild@master', retriever: modernSCM(scm: [$class: 'GitSCMSource', remote: 'https://sbprojects.statsbiblioteket.dk/stash/scm/ist/jenkins-shared.git', credentialsId: 'sbprojects-stash'],libraryPath: "Platform") _
+
+MavenBuild {
+    // Activates the <distributionManagement> profile in pom.xml (SBForge public Nexus). The Jenkins
+    // controller's global Maven settings (surfaced by the library's withMaven) must define a
+    // <server id="sbforge-nexus"> with deploy credentials for sbforge.org -- if the controller only
+    // carries the sbprojects-nexus server, the deploy stage fails with 401 and a credential needs
+    // to be added on the Jenkins side. This id also flows into the verify stage's `mvn` invocation,
+    // where it is inert (distributionManagement only matters to `deploy`).
+    mavenProfiles="sbforge-nexus"
+    // MavenBuild runs the image's own `mvn`, not this repo's ./mvnw, so the image -- not
+    // .mvn/wrapper/maven-wrapper.properties -- selects the Maven version. Keep in step with the project:
+    //   3.9.16 = the Maven the wrapper pins;  temurin-25 = maven.compiler.release in pom.xml.
+    // Do not rely on the library default (maven:3.9.9-eclipse-temurin-21): a Java 21 JDK cannot build a
+    // project with maven.compiler.release=25. When you bump either version, change it here too.
+    mavenImage="maven:3.9.16-eclipse-temurin-25"
+}
+
+// Behavioral contract of MavenBuild@master (Platform/vars/MavenBuild.groovy), since none of it is
+// visible from this file:
+//   * The build stage always runs `mvn <-P mavenProfiles> -PallTests clean install` -- the extra
+//     `allTests` profile is hardcoded, which is why pom.xml declares it as a documented no-op.
+//   * The deploy stage (`mvn clean deploy -DskipTests=true`) is gated by `when { branch 'master' }`
+//     -- literally *master*, not main. On a repository whose default branch is `main`, the pipeline
+//     goes green without ever publishing. The Jenkins job for this repo must therefore live on a
+//     branch named `master` (the org Bitbucket convention), or the deploy silently no-ops; the
+//     hashbin-backend pipeline gates on main|master explicitly for exactly this reason.
+//   * 25-minute pod timeout; single `maven` container agent, no sidecars (the CLI suite needs no
+//     database or daemon -- see README "Tests").
+
+// Ordering dependency: the build compiles against net.hashbin:hashbin-api, which hashbin-backend's
+// pipeline publishes to Nexus (see its ci/Jenkinsfile 'Publish API artifact' stage). This job can only
+// go green after that has run at least once for the version in use. Locally, ./mvnw resolves the sibling
+// from ~/.m2 (see README "Requirements").
+
+// Alternative -- build, test and push a JVM container image to Harbor instead of publishing to Nexus
+// (the shape this repo had first; keep it if a Kubernetes Job starts consuming the image):
+//
+// library identifier: 'DockerfileBuild@master', retriever: modernSCM(scm: [$class: 'GitSCMSource', remote: 'https://sbprojects.statsbiblioteket.dk/stash/scm/ist/jenkins-shared.git', credentialsId: 'sbprojects-stash'],libraryPath: "Platform") _
+//
+// DockerfileBuild { Dockerfile = "src/main/docker/Dockerfile.ci" }
+//
+// What the library does with that value: it reads the file, refuses it unless it declares all five stages as
+// `FROM <image> AS initial|setup|compile|test|final`, then installs it as ./Dockerfile -- the path its own
+// `buildah build --target <stage> -f ./Dockerfile .` steps use. The build context stays the project root, so
+// the recipe's COPY lines work from either location, and the five stage names in src/main/docker/Dockerfile.ci
+// are load-bearing -- do not rename them. Unlike MavenBuild, DockerfileBuild only publishes an image, not a
+// Nexus artifact, and its default (no `Dockerfile` argument, no ./Dockerfile in the repo) is a generic Maven
+// build that silently publishes a different image than this project chose -- hence the explicit argument,
+// and treating "move or delete the Dockerfile" as a change that must be made here too.

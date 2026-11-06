@@ -1,13 +1,40 @@
-# Trim the build context for the native container build (quarkus.native.container-build).
-# .git/ is the biggest win; docs/scripts/ci are never read by the image build, so
-# excluding them keeps the layer cache stable across documentation edits.
+# Shared build context, used by two different build styles:
+#   1. CI (ci/Jenkinsfile -> shared `DockerfileBuild`): compiles from source *inside* the image via
+#      ./mvnw, so the sources, the Maven wrapper and pom.xml must be in the context. Recipe:
+#      src/main/docker/Dockerfile.ci, which the pipeline materialises as ./Dockerfile before building.
+#   2. src/main/docker/Dockerfile.{jvm,native,native-micro}: COPY an already-built artifact (build it
+#      first with `./mvnw package [-Dnative]`), so target/*.jar and the suffix-less native binary must
+#      be in the context. Quarkus's own container-image build picks Dockerfile.jvm by name, which is why
+#      that file cannot simply be folded into Dockerfile.ci.
+# Strategy: exclude everything, then re-include what each build needs (last matching pattern wins, and
+# a file can be re-included even when a bare `*` also matches its parent -- verified against Docker).
+*
 
+# Needed by the in-container compile (CI).
+!pom.xml
+# Every Docker recipe lives here, including Dockerfile.ci: DockerfileConsistencyTest compares the CI
+# `final` stage against Dockerfile.jvm, and can only do so where it can read both files -- which is
+# also inside the `test` stage's build context. Reading the source path rather than the ./Dockerfile the
+# pipeline writes is what keeps that check meaningful in CI; see the test's javadoc.
+!src/
+!src/**
+!mvnw
+!mvnw.cmd
+!.mvn/
+!.mvn/**
+# Bundled resources copied into the artifact by pom.xml <resources> (read by the license/changelog cmds).
+!LICENSE.txt
+!CHANGELOG.md
+
+# Needed by src/main/docker/Dockerfile.* (they COPY an artifact, they do not build one): the über-jar for
+# Dockerfile.jvm, the suffix-less binary for the native ones. The CI build needs neither -- it compiles
+# from source and takes the jar from its own compile stage.
+!target/*.jar
+!target/hashbin-cli-*
+# Update "hashbin-cli" above if you change <artifactId> in pom.xml.
+# ...but never the heavy native-image build intermediate (no Dockerfile reads it; keeps the context lean).
+target/hashbin-cli-*-native-image-source-jar/
+
+# Never ship VCS / IDE metadata into an image.
 .git/
-.gitignore
 .idea/
-.vscode/
-*.iml
-.quarkus/
-*.env
-docs/
-scripts/

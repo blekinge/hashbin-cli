@@ -188,9 +188,22 @@ docker build -f src/main/docker/Dockerfile.jvm -t hashbin/hashbin-cli-jvm .
 docker run --rm hashbin/hashbin-cli-jvm health
 ```
 
-A CI recipe (`Dockerfile.ci` + `ci/Jenkinsfile`) is intentionally not added yet; the
-`DockerfileConsistencyTest` guard that pairs `Dockerfile.ci` with `Dockerfile.jvm`
-skips until that file is present.
+CI (`ci/Jenkinsfile`) uses the shared `MavenBuild` pipeline: it runs the suite and
+publishes the über-jar to SBForge's public Nexus (`-Psbforge-nexus`). The CI build recipe
+`Dockerfile.ci` in `src/main/docker/` remains for container builds — it compiles from
+source inside the image (five stages: initial → setup → compile → test → final; it is the
+active pipeline shape if a Kubernetes Job starts consuming the image), and unlike the
+siblings needs no pre-built artifact, e.g. with buildah:
+
+```bash
+buildah build --layers -f src/main/docker/Dockerfile.ci \
+  --secret id=settings.xml,src=$HOME/.m2/settings.xml \
+  --target final -t hashbin-cli:local .
+podman run --rm hashbin-cli:local health
+```
+
+`DockerfileConsistencyTest` keeps the runtime half of `Dockerfile.ci` and `Dockerfile.jvm`
+in step (base image, user, entrypoint, artifact coordinates).
 
 ## Tests
 
