@@ -60,7 +60,7 @@ public class VerifyCommand implements Callable<Integer> {
         } else if (Fmt.looksLikeHexHash(target)) {
             hash = target.toLowerCase();
         } else {
-            Console.stdOutLn(
+            Console.stdErrLn(
                     Console.red("✗ '")
                             + target
                             + Console.red("' is not a valid hex hash or existing file"));

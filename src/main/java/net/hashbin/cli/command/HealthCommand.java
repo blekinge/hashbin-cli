@@ -25,7 +25,7 @@ public class HealthCommand implements Callable<Integer> {
                 Cli.ok("hashbin API is healthy  " + Console.dim(config.apiBase()));
                 return 0;
             }
-            Console.stdOutLn(Console.red("✗ ") + "unexpected response: status=" + status);
+            Console.stdErrLn(Console.red("✗ ") + "unexpected response: status=" + status);
             return 1;
         } catch (ApiException e) {
             return Cli.fail(e);

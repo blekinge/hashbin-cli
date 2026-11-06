@@ -26,7 +26,7 @@ public class MyTimestampsCommand implements Callable<Integer> {
     public Integer call() {
         String token = config.token();
         if (token == null) {
-            Console.stdOutLn(
+            Console.stdErrLn(
                     Console.red("✗ ")
                             + "No token. Run `hashbin auth login` or pass --token / HASHBIN_TOKEN.");
             return 1;

@@ -85,7 +85,7 @@ public class AuthCommand implements Runnable {
         public Integer call() {
             String pass = resolvePassword();
             if (pass == null) {
-                Console.stdOutLn(Console.red("✗ ") + "A password is required.");
+                Console.stdErrLn(Console.red("✗ ") + "A password is required.");
                 return 1;
             }
             try {
@@ -105,7 +105,7 @@ public class AuthCommand implements Runnable {
         public Integer call() {
             String pass = resolvePassword();
             if (pass == null) {
-                Console.stdOutLn(Console.red("✗ ") + "A password is required.");
+                Console.stdErrLn(Console.red("✗ ") + "A password is required.");
                 return 1;
             }
             try {
@@ -129,7 +129,7 @@ public class AuthCommand implements Runnable {
         public Integer call() {
             String token = config.token();
             if (token == null) {
-                Console.stdOutLn(Console.red("✗ ") + "Not signed in. Run `hashbin auth login`.");
+                Console.stdErrLn(Console.red("✗ ") + "Not signed in. Run `hashbin auth login`.");
                 return 1;
             }
             try {
