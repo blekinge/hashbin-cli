@@ -47,10 +47,6 @@ import org.jspecify.annotations.Nullable;
  * {@code @Provider}-registered {@code ApiExceptionMapper}; {@link #guard} translates it (and
  * transport failures) into the CLI's own {@link ApiException}. The facade's remaining job is
  * adapting the generated DTOs to the CLI's stable models.
- *
- * <p>Two endpoints ({@code /health}, {@code /auth/login}) are declared with a loose schema in the
- * backend's OpenAPI document and so arrive as a raw {@code Object} (a Jackson {@code Map}); the
- * facade reads the fields it needs from that map.
  */
 @ApplicationScoped
 public class HashbinClient {
@@ -101,7 +97,7 @@ public class HashbinClient {
         return guard(health::apiHealthGet).getStatus();
     }
 
-    /** POST /stamp. {@code payload} keys are the snake_case wire names. */
+    /** POST /stamp with the digests computed from a file → the created record. */
     public TimestampRecord stamp(net.hashbin.cli.model.StampRequest payload) {
         return TimestampRecord.map(
                 guard(
@@ -148,7 +144,7 @@ public class HashbinClient {
                 guard(() -> auth.apiAuthRegisterPost(toAuthRequest(email, password))));
     }
 
-    /** POST /auth/login → 200 + AuthResponse (loose schema: parsed from the raw body map). */
+    /** POST /auth/login → 200 + AuthResponse. */
     public AuthResponse login(String email, String password) {
         return AuthResponse.map(guard(() -> auth.apiAuthLoginPost(toAuthRequest(email, password))));
     }
