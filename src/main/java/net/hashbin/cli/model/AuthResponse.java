@@ -13,15 +13,4 @@ import lombok.Builder;
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 @Builder
 public record AuthResponse(
-        String token, String tokenType, long expiresIn, String userId, String email) {
-
-    public static AuthResponse map(final net.hashbin.api.model.AuthResponse r) {
-        return builder()
-                .token(r.getToken())
-                .tokenType(r.getTokenType())
-                .expiresIn(r.getExpiresIn() != null ? r.getExpiresIn() : 0L)
-                .userId(r.getUserId())
-                .email(r.getEmail())
-                .build();
-    }
-}
+        String token, String tokenType, long expiresIn, String userId, String email) {}

@@ -12,7 +12,6 @@ import java.util.function.Supplier;
 import net.hashbin.api.AuthApi;
 import net.hashbin.api.HealthResourceApi;
 import net.hashbin.api.TimestampsApi;
-import net.hashbin.api.model.AuthRequest;
 import net.hashbin.cli.config.CliConfig;
 import net.hashbin.cli.model.AuthResponse;
 import net.hashbin.cli.model.TimestampRecord;
@@ -99,19 +98,17 @@ public class HashbinClient {
 
     /** POST /stamp with the digests computed from a file → the created record. */
     public TimestampRecord stamp(net.hashbin.cli.model.StampRequest payload) {
-        return TimestampRecord.map(
+        return DtoMapper.toRecord(
                 guard(
                         () ->
                                 timestamps.apiStampPost(
-                                        net.hashbin.cli.model.StampRequest.toStampRequest(payload),
-                                        null,
-                                        null)));
+                                        DtoMapper.toApiStampRequest(payload), null, null)));
     }
 
     /** GET /verify?hash=…&algorithm=… → array of public records. */
     public List<TimestampRecord> verify(String hash, String algorithm) {
         return guard(() -> timestamps.apiVerifyGet(algorithmOrNull(algorithm), hash)).stream()
-                .map(TimestampRecord::map)
+                .map(DtoMapper::toRecord)
                 .toList();
     }
 
@@ -123,14 +120,14 @@ public class HashbinClient {
 
     /** GET /my-timestamps → array of full records (bearer token applied by the header factory). */
     public List<TimestampRecord> myTimestamps() {
-        return guard(timestamps::apiMyTimestampsGet).stream().map(TimestampRecord::map).toList();
+        return guard(timestamps::apiMyTimestampsGet).stream().map(DtoMapper::toRecord).toList();
     }
 
     /** GET /explore?limit=…&offset=… → array of public records. */
     public List<TimestampRecord> explore(Integer limit, Integer offset) {
         return guard(() -> timestamps.apiExploreGet(stringOrNull(limit), stringOrNull(offset)))
                 .stream()
-                .map(TimestampRecord::map)
+                .map(DtoMapper::toRecord)
                 .toList();
     }
 
@@ -140,27 +137,19 @@ public class HashbinClient {
 
     /** POST /auth/register → 201 + AuthResponse. */
     public AuthResponse register(String email, String password) {
-        return AuthResponse.map(
-                guard(() -> auth.apiAuthRegisterPost(toAuthRequest(email, password))));
+        return DtoMapper.toAuthResponse(
+                guard(() -> auth.apiAuthRegisterPost(DtoMapper.toApiAuthRequest(email, password))));
     }
 
     /** POST /auth/login → 200 + AuthResponse. */
     public AuthResponse login(String email, String password) {
-        return AuthResponse.map(guard(() -> auth.apiAuthLoginPost(toAuthRequest(email, password))));
+        return DtoMapper.toAuthResponse(
+                guard(() -> auth.apiAuthLoginPost(DtoMapper.toApiAuthRequest(email, password))));
     }
 
     /** GET /auth/me → MeView (bearer token applied by the header factory). */
     public net.hashbin.cli.model.MeView me() {
-        return net.hashbin.cli.model.MeView.map(guard(auth::apiAuthMeGet));
-    }
-
-    // ── Model adaptation ────────────────────────────────────────────────────
-
-    private static AuthRequest toAuthRequest(String email, String password) {
-        AuthRequest request = new AuthRequest();
-        request.setEmail(email);
-        request.setPassword(password);
-        return request;
+        return DtoMapper.toMeView(guard(auth::apiAuthMeGet));
     }
 
     // ── Error mapping ───────────────────────────────────────────────────────

@@ -9,9 +9,4 @@ import lombok.Builder;
 @RegisterForReflection
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 @Builder
-public record MeView(String userId, String email) {
-
-    public static MeView map(final net.hashbin.api.model.MeView me) {
-        return builder().userId(me.getUserId()).email(me.getEmail()).build();
-    }
-}
+public record MeView(String userId, String email) {}
